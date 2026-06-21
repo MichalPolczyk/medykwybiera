@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dyżur — dopasowanie pielęgniarek i pracodawców</title>
+<style>
+  :root{
+    --bg:#EEF1EF; --surface:#fff; --ink:#18302B; --sage:#3F7A6B;
+    --sageSoft:#D7E6E0; --coral:#DD6B4F; --amber:#D69A3C; --muted:#6B7F79; --line:#DCE3E0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:28px 20px 64px}
+  header{display:flex;align-items:baseline;gap:10px}
+  .logo{font-size:26px;font-weight:800;letter-spacing:-.02em}
+  .dot{color:var(--sage);font-size:26px;font-weight:800}
+  .sub{color:var(--muted);font-size:13px}
+  .lead{color:var(--muted);font-size:14.5px;margin-top:6px;max-width:560px;line-height:1.5}
+  .toggle{display:inline-flex;background:var(--surface);border:1px solid var(--line);
+    border-radius:10px;padding:4px;margin-top:18px}
+  .toggle button{border:none;cursor:pointer;padding:8px 16px;border-radius:7px;font-size:14px;
+    font-weight:600;background:transparent;color:var(--muted);font-family:inherit}
+  .toggle button.on{background:var(--sage);color:#fff}
+  .row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center}
+  select,input{padding:10px 12px;border-radius:8px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);font-size:14px;font-family:inherit;width:100%}
+  .pick{flex:1;min-width:240px}
+  .btn{border:1px solid var(--sage);background:transparent;color:var(--sage);padding:10px 14px;
+    border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .btn.solid{background:var(--sage);color:#fff;border:none}
+  .btn.dark{background:var(--ink);color:#fff;border:none}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .tag{font-size:11.5px;color:var(--sage);background:var(--sageSoft);padding:3px 8px;border-radius:999px;white-space:nowrap}
+  .note{color:var(--muted);font-size:13.5px;margin-top:10px;line-height:1.5}
+  h2.section{font-size:15px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;margin:28px 0 4px}
+  .match{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:10px}
+  .match .top{display:flex;gap:14px;padding:16px;align-items:center}
+  .name{font-weight:700;font-size:15.5px}
+  .tier{margin-top:8px;font-size:12.5px;font-weight:600}
+  .details{padding:0 16px 16px;border-top:1px solid var(--line)}
+  .bar{display:flex;align-items:center;gap:8px;font-size:12px;margin-top:7px}
+  .bar .lab{width:96px;color:var(--muted);flex-shrink:0}
+  .bar .track{flex:1;height:6px;background:var(--line);border-radius:4px;overflow:hidden}
+  .bar .fill{height:100%;background:var(--sage);border-radius:4px}
+  .bar .val{width:38px;text-align:right;font-variant-numeric:tabular-nums}
+  .formgrid{display:flex;flex-wrap:wrap;gap:12px}
+  .field{flex:1 1 180px;min-width:150px}
+  .field label{font-size:12px;color:var(--muted);margin-bottom:4px;display:block}
+  .small{font-size:12px;color:var(--muted);margin:10px 0 0}
+  .foot{color:var(--muted);font-size:12px;margin-top:28px;line-height:1.5;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="logo">Dyżur</span><span class="dot">.</span>
+    <span class="sub">prototyp dopasowania</span>
+  </header>
+  <p class="lead" id="lead"></p>
+
+  <div class="toggle">
+    <button id="m-nurse" class="on" onclick="setMode('nurse')">Jestem pielęgniarką</button>
+    <button id="m-emp" onclick="setMode('employer')">Jestem pracodawcą</button>
+  </div>
+
+  <div class="row">
+    <select class="pick" id="picker" onchange="onPick()"></select>
+    <button class="btn" id="addBtn" onclick="toggleForm()">+ Dodaj</button>
+  </div>
+
+  <div id="formBox"></div>
+  <div id="activeBox"></div>
+
+  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:8px">
+    <h2 class="section">Poranna dziesiątka</h2>
+    <span class="sub" id="matchHint"></span>
+  </div>
+  <div id="matches"></div>
+
+  <p class="foot">Prototyp z prawdziwą bazą. Dane zapisują się na serwerze. Bez logowania,
+    weryfikacji PWZ i warstwy RODO — to kolejne kroki.</p>
+</div>
+
+<script>
+const SPECS = ["Anestezjologiczne i intensywna terapia","Ratunkowe / SOR","Chirurgiczne / blok operacyjny","Internistyczne / zachowawcze","Kardiologiczne","Onkologiczne","Dializoterapia / nefrologiczne","POZ / środowiskowo-rodzinne","Pediatryczne / neonatologiczne","Geriatryczne / opieka długoterminowa"];
+const FORMY = ["Umowa o pracę","Umowa zlecenie","Kontrakt B2B","Dowolna"];
+const TRYBY = ["Jednozmianowy (dzienny)","Zmianowy (w tym noce)","Dowolny"];
+const CITIES = ["Warszawa","Kraków","Wrocław","Poznań","Gdańsk","Katowice","Łódź","Rzeszów","Jasło","Lublin","Bydgoszcz","Szczecin"];
+
+let mode = "nurse";
+let list = [];
+let selId = null;
+let formOpen = false;
+
+const tierColor = t => t>=80?"var(--coral)":t>=60?"var(--sage)":t>=40?"var(--amber)":"var(--muted)";
+const tierLabel = t => t>=80?"Bardzo wysokie":t>=60?"Wysokie":t>=40?"Średnie":"Niskie";
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function load(){
+  const url = mode==="nurse" ? "/api/nurses" : "/api/offers";
+  list = await (await fetch(url)).json();
+  if(!list.find(x=>x.id===selId)) selId = list.length ? list[0].id : null;
+  renderPicker(); renderActive(); await renderMatches();
+}
+
+function setMode(m){
+  mode=m; selId=null; formOpen=false;
+  document.getElementById("m-nurse").className = m==="nurse"?"on":"";
+  document.getElementById("m-emp").className = m==="employer"?"on":"";
+  document.getElementById("addBtn").textContent = m==="nurse"?"+ Dodaj pielęgniarkę":"+ Dodaj ofertę";
+  document.getElementById("formBox").innerHTML="";
+  document.getElementById("lead").textContent =
+    "Odwrócona rekrutacja dla pielęgniarek. Wybierz profil, a system pokaże najlepiej dopasowane "
+    + (m==="nurse"?"oferty":"kandydatki") + " — z wyliczonym wynikiem i powodem.";
+  document.getElementById("matchHint").textContent =
+    (m==="nurse"?"oferty dla Ciebie":"kandydatki dla Ciebie") + ", wg dopasowania";
+  load();
+}
+
+function onPick(){ selId = Number(document.getElementById("picker").value); renderActive(); renderMatches(); }
+
+function renderPicker(){
+  const p = document.getElementById("picker");
+  p.innerHTML = list.map(x=>{
+    const label = mode==="nurse" ? `${x.name} — ${x.spec}` : `${x.place} — ${x.spec}`;
+    return `<option value="${x.id}" ${x.id===selId?"selected":""}>${esc(label)}</option>`;
+  }).join("");
+}
+
+function renderActive(){
+  const a = list.find(x=>x.id===selId);
+  const box = document.getElementById("activeBox");
+  if(!a){ box.innerHTML=""; return; }
+  const title = mode==="nurse"?a.name:a.place;
+  const expTag = mode==="nurse"?`${a.years} lat dośw.`:`min. ${a.min_years} lat`;
+  const payTag = mode==="nurse"?`oczek. ${a.expected||"—"} zł`:`${a.salary} zł`;
+  box.innerHTML = `<div class="card">
+    <div class="name">${esc(title)}</div>
+    <div class="tags">
+      <span class="tag">${esc(a.spec)}</span><span class="tag">${esc(a.city)}</span>
+      <span class="tag">${expTag}</span><span class="tag">${esc(a.forma)}</span>
+      <span class="tag">${esc(a.tryb)}</span><span class="tag">${payTag}</span>
+    </div>
+    <p class="note">${esc(a.note)}</p></div>`;
+}
+
+function ring(v){
+  const r=26,c=2*Math.PI*r,off=c*(1-v/100);
+  return `<svg width="64" height="64" viewBox="0 0 64 64">
+    <circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--line)" stroke-width="6"/>
+    <circle cx="32" cy="32" r="${r}" fill="none" stroke="${tierColor(v)}" stroke-width="6"
+      stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"
+      transform="rotate(-90 32 32)"/>
+    <text x="32" y="33" text-anchor="middle" dominant-baseline="middle"
+      style="font-size:19px;font-weight:800;fill:var(--ink)">${v}</text></svg>`;
+}
+
+function bar(label,v,max){
+  return `<div class="bar"><span class="lab">${label}</span>
+    <span class="track"><span class="fill" style="width:${v/max*100}%"></span></span>
+    <span class="val">${v}/${max}</span></div>`;
+}
+
+async function renderMatches(){
+  const box = document.getElementById("matches");
+  if(!selId){ box.innerHTML = `<p class="small">Brak profilu. Dodaj pierwszy, aby zobaczyć dopasowania.</p>`; return; }
+  const res = await (await fetch(`/api/match?role=${mode}&id=${selId}`)).json();
+  box.innerHTML = res.slice(0,10).map(m=>{
+    const it=m.item, title = mode==="nurse"?it.place:it.name;
+    return `<div class="match">
+      <div class="top">
+        ${ring(m.total)}
+        <div style="flex:1;min-width:0">
+          <div class="name">${esc(title)}</div>
+          <div class="tags">
+            <span class="tag">${esc(it.spec)}</span>
+            <span class="tag">${esc(it.city)} · ${m.distance} km</span>
+            <span class="tag">${esc(it.forma)}</span>
+          </div>
+          <div class="tier" style="color:${tierColor(m.total)}">Dopasowanie: ${tierLabel(m.total)}</div>
+        </div>
+        <button class="btn" onclick="toggleDet(this)">Szczegóły</button>
+      </div>
+      <div class="details" style="display:none">
+        ${bar("Specjalizacja",m.parts.spec,20)}${bar("Lokalizacja",m.parts.loc,20)}
+        ${bar("Forma",m.parts.forma,15)}${bar("Tryb pracy",m.parts.tryb,10)}
+        ${bar("Doświadczenie",m.parts.exp,10)}${bar("Wynagrodzenie",m.parts.sal,25)}
+        <p class="note">${esc(it.note)}</p>
+      </div></div>`;
+  }).join("");
+}
+
+function toggleDet(btn){
+  const d = btn.closest(".match").querySelector(".details");
+  const open = d.style.display!=="none";
+  d.style.display = open?"none":"block";
+  btn.textContent = open?"Szczegóły":"Zwiń";
+}
+
+function toggleForm(){
+  formOpen=!formOpen;
+  document.getElementById("formBox").innerHTML = formOpen?formHTML():"";
+}
+
+function opts(arr,sel){ return arr.map(x=>`<option ${x===sel?"selected":""}>${esc(x)}</option>`).join(""); }
+
+function formHTML(){
+  const isN = mode==="nurse";
+  return `<div class="card" style="border-color:var(--sage)">
+    <datalist id="cl">${CITIES.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+    <div class="formgrid">
+      <div class="field"><label>${isN?"Imię / inicjały":"Nazwa placówki"}</label>
+        <input id="f_a" placeholder="${isN?"np. Anna K.":"np. Szpital Powiatowy"}"></div>
+      <div class="field"><label>Miasto (wpisz dowolne)</label>
+        <input id="f_city" list="cl" placeholder="np. Sieradz, Tarnów…"></div>
+      <div class="field"><label>Specjalizacja</label><select id="f_spec">${opts(SPECS)}</select></div>
+      <div class="field"><label>${isN?"Lata doświadczenia":"Min. lata doświadczenia"}</label>
+        <input id="f_years" type="number" value="${isN?5:3}"></div>
+      <div class="field"><label>Forma zatrudnienia</label><select id="f_forma">${opts(FORMY)}</select></div>
+      <div class="field"><label>Tryb pracy</label><select id="f_tryb">${opts(TRYBY)}</select></div>
+      <div class="field"><label>${isN?"Oczekiwane wynagr. (zł netto)":"Oferowane wynagr. (zł)"}</label>
+        <input id="f_pay" type="number" value="${isN?6500:7000}"></div>
+      ${isN?`<div class="field"><label>Maks. dojazd (km)</label><input id="f_km" type="number" value="50"></div>`:""}
+      <div style="flex:1 1 100%"><label style="font-size:12px;color:var(--muted)">Notatka</label>
+        <input id="f_note" placeholder="np. preferencje, kursy, dyspozycyjność"></div>
+    </div>
+    <p class="small">Miasto spoza listy: odległość liczona jako 150 km (do podmiany na geocoding).</p>
+    <button class="btn solid" style="margin-top:12px" onclick="submitForm()">
+      ${isN?"Dodaj i zobacz dopasowania":"Dodaj ofertę i zobacz kandydatki"}</button>
+  </div>`;
+}
+
+async function submitForm(){
+  const v = id => document.getElementById(id)?.value;
+  const isN = mode==="nurse";
+  const city = (v("f_city")||"").trim() || CITIES[0];
+  let body, url;
+  if(isN){
+    url="/api/nurses";
+    body={name:v("f_a")||"Nowa pielęgniarka",city,spec:v("f_spec"),years:Number(v("f_years"))||0,
+      forma:v("f_forma"),tryb:v("f_tryb"),max_km:Number(v("f_km"))||50,
+      expected:Number(v("f_pay"))||0,note:v("f_note")||"—"};
+  } else {
+    url="/api/offers";
+    body={place:v("f_a")||"Nowa placówka",city,spec:v("f_spec"),min_years:Number(v("f_years"))||0,
+      forma:v("f_forma"),tryb:v("f_tryb"),salary:Number(v("f_pay"))||0,note:v("f_note")||"—"};
+  }
+  const created = await (await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(body)})).json();
+  formOpen=false; document.getElementById("formBox").innerHTML="";
+  selId = created.id;
+  await load();
+}
+
+setMode("nurse");
+</script>
+</body>
+</html>
