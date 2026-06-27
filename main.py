@@ -1,21 +1,21 @@
 """
 DYŻUR — backend MVP (FastAPI + SQLAlchemy)
 Jeden plik: modele, silnik dopasowania, API, serwowanie frontu.
-
+ 
 Uruchomienie lokalne:
     pip install -r requirements.txt
     uvicorn main:app --reload
     -> http://127.0.0.1:8000
-
+ 
 W chmurze (Render) baza ustawiana jest przez zmienną DATABASE_URL.
 Lokalnie domyślnie używany jest plik SQLite (dyzur.db).
 """
-
+ 
 import os
 import math
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-
+ 
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,7 +24,7 @@ from sqlalchemy import create_engine, Integer, String, Float, Boolean, DateTime,
 from sqlalchemy.orm import (
     DeclarativeBase, Mapped, mapped_column, Session, sessionmaker,
 )
-
+ 
 # --------------------------------------------------------------------------
 # BAZA DANYCH
 # --------------------------------------------------------------------------
@@ -32,16 +32,16 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./dyzur.db")
 # Render bywa zwraca "postgres://", SQLAlchemy potrzebuje "postgresql://"
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
+ 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-
-
+ 
+ 
 class Base(DeclarativeBase):
     pass
-
-
+ 
+ 
 class Nurse(Base):
     __tablename__ = "nurses"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -54,8 +54,8 @@ class Nurse(Base):
     max_km: Mapped[int] = mapped_column(Integer, default=50)
     expected: Mapped[int] = mapped_column(Integer, default=0)
     note: Mapped[str] = mapped_column(String, default="")
-
-
+ 
+ 
 class Offer(Base):
     __tablename__ = "offers"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -75,16 +75,16 @@ class Offer(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
+ 
+ 
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
-
+ 
+ 
 # --------------------------------------------------------------------------
 # SILNIK DOPASOWANIA (port 1:1 z prototypu JS)
 # --------------------------------------------------------------------------
@@ -96,7 +96,7 @@ CITIES = {
     "Jasło": (49.7448, 21.4715), "Lublin": (51.2465, 22.5684),
     "Bydgoszcz": (53.1235, 18.0084), "Szczecin": (53.4285, 14.5528),
 }
-
+ 
 SPEC_FAMILY = {
     "Anestezjologiczne i intensywna terapia": "krytyczna",
     "Ratunkowe / SOR": "krytyczna",
@@ -109,8 +109,8 @@ SPEC_FAMILY = {
     "Pediatryczne / neonatologiczne": "pediatria",
     "Geriatryczne / opieka długoterminowa": "dlugoterminowa",
 }
-
-
+ 
+ 
 def distance_km(a: str, b: str) -> int:
     if a == b:
         return 0
@@ -124,8 +124,8 @@ def distance_km(a: str, b: str) -> int:
          + math.cos(math.radians(la1)) * math.cos(math.radians(la2))
          * math.sin(d_lo / 2) ** 2)
     return round(2 * R * math.asin(math.sqrt(s)))
-
-
+ 
+ 
 def score(nurse: Nurse, offer: Offer) -> dict:
     # specjalizacja (20)
     if nurse.spec == offer.spec:
@@ -134,7 +134,7 @@ def score(nurse: Nurse, offer: Offer) -> dict:
         spec = 12
     else:
         spec = 4
-
+ 
     # lokalizacja (20)
     d = distance_km(nurse.city, offer.city)
     if d <= nurse.max_km:
@@ -143,44 +143,51 @@ def score(nurse: Nurse, offer: Offer) -> dict:
         loc = round(20 - ((d - nurse.max_km) / nurse.max_km) * 14)
     else:
         loc = 3
-
-    # forma (15)
-    if nurse.forma == offer.forma or "Dowolna" in (nurse.forma, offer.forma):
+ 
+    # forma (15) — "Nieokreślona" (z importu, brak danych) ma niższą, neutralną wartość
+    if "Nieokreślona" in (nurse.forma, offer.forma):
+        forma = 9
+    elif nurse.forma == offer.forma or "Dowolna" in (nurse.forma, offer.forma):
         forma = 15
     elif all(f in ("Umowa o pracę", "Umowa zlecenie") for f in (nurse.forma, offer.forma)):
         forma = 8
     else:
         forma = 4
-
-    # tryb (10)
-    tryb = 10 if (nurse.tryb == offer.tryb or "Dowolny" in (nurse.tryb, offer.tryb)) else 3
-
+ 
+    # tryb (10) — "Nieokreślony" (z importu) niżej niż świadomy "Dowolny"
+    if "Nieokreślony" in (nurse.tryb, offer.tryb):
+        tryb = 6
+    elif nurse.tryb == offer.tryb or "Dowolny" in (nurse.tryb, offer.tryb):
+        tryb = 10
+    else:
+        tryb = 3
+ 
     # doświadczenie (10)
     if offer.min_years <= 0 or nurse.years >= offer.min_years:
         exp = 10
     else:
         exp = max(3, round((nurse.years / offer.min_years) * 10))
-
-    # wynagrodzenie (25) — neutralne 15 pkt, gdy pensji brak albo jest estymacją Adzuny
+ 
+    # wynagrodzenie (25) — neutralne 10 pkt, gdy pensji brak albo jest estymacją Adzuny
     if not nurse.expected:
         sal = 25
     elif (not offer.salary) or getattr(offer, "salary_predicted", False):
-        sal = 15  # nie wiemy realnie, nie decydujemy na podstawie zgadywanej kwoty
+        sal = 10  # nie wiemy realnie, nie decydujemy na podstawie zgadywanej kwoty
     elif offer.salary >= nurse.expected:
         sal = 25
     elif offer.salary >= nurse.expected * 0.9:
         sal = 15
     else:
         sal = 5
-
+ 
     return {
         "total": spec + loc + forma + tryb + exp + sal,
         "parts": {"spec": spec, "loc": loc, "forma": forma,
                   "tryb": tryb, "exp": exp, "sal": sal},
         "distance": d,
     }
-
-
+ 
+ 
 # --------------------------------------------------------------------------
 # SCHEMATY (walidacja wejścia)
 # --------------------------------------------------------------------------
@@ -194,8 +201,8 @@ class NurseIn(BaseModel):
     max_km: int = 50
     expected: int = 0
     note: str = ""
-
-
+ 
+ 
 class OfferIn(BaseModel):
     place: str = "Nowa placówka"
     city: str
@@ -205,14 +212,14 @@ class OfferIn(BaseModel):
     tryb: str
     salary: int = 0
     note: str = ""
-
-
+ 
+ 
 def nurse_dict(n: Nurse) -> dict:
     return {"id": n.id, "name": n.name, "city": n.city, "spec": n.spec,
             "years": n.years, "forma": n.forma, "tryb": n.tryb,
             "max_km": n.max_km, "expected": n.expected, "note": n.note}
-
-
+ 
+ 
 def offer_dict(o: Offer) -> dict:
     return {"id": o.id, "place": o.place, "city": o.city, "spec": o.spec,
             "min_years": o.min_years, "forma": o.forma, "tryb": o.tryb,
@@ -220,8 +227,8 @@ def offer_dict(o: Offer) -> dict:
             "url": getattr(o, "url", "") or "",
             "source": getattr(o, "source", "direct"),
             "salary_predicted": bool(getattr(o, "salary_predicted", False))}
-
-
+ 
+ 
 # --------------------------------------------------------------------------
 # DANE STARTOWE (wstawiane raz, gdy baza pusta)
 # --------------------------------------------------------------------------
@@ -235,7 +242,7 @@ SEED_NURSES = [
     dict(name="Agnieszka M.", city="Rzeszów", spec="Kardiologiczne", years=7, forma="Umowa o pracę", tryb="Dowolny", max_km=70, expected=7400, note="Oddział kardiologii, kurs EKG, mogę dojeżdżać."),
     dict(name="Monika T.", city="Gdańsk", spec="Onkologiczne", years=8, forma="Dowolna", tryb="Jednozmianowy (dzienny)", max_km=40, expected=7800, note="Koordynacja onkologiczna, edukacja pacjenta, praca w dzień."),
 ]
-
+ 
 SEED_OFFERS = [
     dict(place="Kliniczny Szpital Wojewódzki — OIT", city="Rzeszów", spec="Anestezjologiczne i intensywna terapia", min_years=5, forma="Umowa o pracę", tryb="Zmianowy (w tym noce)", salary=7500, note="Pielęgniarka anestezjologiczna na OIT. Dodatek za pracę w porze nocnej."),
     dict(place="Przychodnia POZ Zdrowie", city="Jasło", spec="POZ / środowiskowo-rodzinne", min_years=2, forma="Umowa o pracę", tryb="Jednozmianowy (dzienny)", salary=6100, note="Praca od poniedziałku do piątku, gabinet zabiegowy i szczepienia."),
@@ -246,20 +253,19 @@ SEED_OFFERS = [
     dict(place="Centrum Kardiologii", city="Kraków", spec="Kardiologiczne", min_years=5, forma="Umowa o pracę", tryb="Jednozmianowy (dzienny)", salary=7300, note="Oddział kardiologii, wymagany kurs EKG, praca głównie w dzień."),
     dict(place="Centrum Onkologii — Poradnia", city="Gdańsk", spec="Onkologiczne", min_years=6, forma="Umowa o pracę", tryb="Jednozmianowy (dzienny)", salary=7900, note="Koordynacja onkologiczna, edukacja i wsparcie pacjentów onkologicznych."),
 ]
-
-
+ 
+ 
 def seed_if_empty():
     db = SessionLocal()
     try:
         if db.query(Nurse).count() == 0:
             db.add_all(Nurse(**n) for n in SEED_NURSES)
-        if db.query(Offer).count() == 0:
-            db.add_all(Offer(**o) for o in SEED_OFFERS)
+        # ofert już nie seedujemy — pochodzą z importu Adzuny
         db.commit()
     finally:
         db.close()
-
-
+ 
+ 
 # --------------------------------------------------------------------------
 # APLIKACJA
 # --------------------------------------------------------------------------
@@ -281,30 +287,30 @@ def migrate_offers():
                 conn.execute(text(stmt))
             except Exception:
                 pass  # np. SQLite bez IF NOT EXISTS — kolumna już jest
-
-
+ 
+ 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     migrate_offers()
     seed_if_empty()
     yield
-
-
+ 
+ 
 app = FastAPI(title="Dyżur API", lifespan=lifespan)
-
-
+ 
+ 
 @app.get("/api/nurses")
 def list_nurses(db: Session = Depends(get_db)):
     return [nurse_dict(n) for n in db.query(Nurse).order_by(Nurse.id.desc())]
-
-
+ 
+ 
 @app.get("/api/offers")
 def list_offers(db: Session = Depends(get_db)):
     q = db.query(Offer).filter(Offer.active == True).order_by(Offer.id.desc()).limit(200)
     return [offer_dict(o) for o in q]
-
-
+ 
+ 
 @app.post("/api/nurses")
 def add_nurse(data: NurseIn, db: Session = Depends(get_db)):
     n = Nurse(**data.model_dump())
@@ -312,8 +318,8 @@ def add_nurse(data: NurseIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(n)
     return nurse_dict(n)
-
-
+ 
+ 
 @app.post("/api/offers")
 def add_offer(data: OfferIn, db: Session = Depends(get_db)):
     o = Offer(**data.model_dump())
@@ -321,8 +327,8 @@ def add_offer(data: OfferIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(o)
     return offer_dict(o)
-
-
+ 
+ 
 @app.get("/api/match")
 def match(role: str, id: int, db: Session = Depends(get_db)):
     if role == "nurse":
@@ -345,15 +351,15 @@ def match(role: str, id: int, db: Session = Depends(get_db)):
         raise HTTPException(400, "role musi być 'nurse' lub 'employer'")
     results.sort(key=lambda r: r["total"], reverse=True)
     return results
-
-
+ 
+ 
 # --------------------------------------------------------------------------
 # IMPORTER ADZUNY — zaciąga oferty, mapuje na model, robi upsert
 # --------------------------------------------------------------------------
 IMPORT_STATUS = {"running": False, "last_run": None, "added": 0,
                  "updated": 0, "errors": 0, "fetched": 0, "deactivated": 0}
-
-
+ 
+ 
 def _adzuna_city(ad):
     """Wyciąga miasto z pola location Adzuny i dopasowuje do bazy CITIES, jeśli się da."""
     loc = ad.get("location", {}) or {}
@@ -365,40 +371,51 @@ def _adzuna_city(ad):
             return c
     # nie ma w bazie — zwróć najbardziej szczegółowy człon (distance da fallback 150 km)
     return (area[-1] if area else (loc.get("display_name", "") or "")).split(",")[0].strip() or "Polska"
-
-
+ 
+ 
 def _adzuna_forma(ad):
     ct = (ad.get("contract_type") or "").lower()
     if ct == "permanent":
         return "Umowa o pracę"
     if ct == "contract":
         return "Kontrakt B2B"
-    return "Dowolna"  # nieokreślone — nie karzemy
-
-
+    return "Nieokreślona"  # brak danych — neutralne, nie pełne punkty
+ 
+ 
 def _adzuna_tryb(text_blob):
     t = (text_blob or "").lower()
     if "noc" in t or "zmianow" in t or "dyżur" in t:
         return "Zmianowy (w tym noce)"
     if "jednozmian" in t or "dzienn" in t or "poniedziałek" in t:
         return "Jednozmianowy (dzienny)"
-    return "Dowolny"
-
-
+    return "Nieokreślony"  # brak danych — neutralne
+ 
+ 
+def _adzuna_place(ad):
+    """Nazwa pracodawcy, ale gdy Adzuna zwróci portal pośredniczący, użyj tytułu oferty."""
+    company = ((ad.get("company", {}) or {}).get("display_name") or "").strip()
+    title = (ad.get("title", "") or "").strip()
+    portal_markers = [".pl", "praca", "jobs", "work", "rekrutacj", "olx", "indeed", "gowork", "pracuj"]
+    c = company.lower()
+    if not company or any(m in c for m in portal_markers):
+        return (title or "Oferta dla pielęgniarki")[:160]
+    return company[:160]
+ 
+ 
 def run_import(max_pages_big=4, max_pages_small=1):
     """Pełny przebieg importu. Uruchamiany w tle, więc nie blokuje żądania."""
     import time
     import json as _json
     import urllib.request
     import urllib.parse
-
+ 
     app_id = os.environ.get("ADZUNA_APP_ID")
     app_key = os.environ.get("ADZUNA_APP_KEY")
     if not app_id or not app_key:
         IMPORT_STATUS.update(running=False, errors=IMPORT_STATUS["errors"] + 1,
                              last_run="brak kluczy ADZUNA_APP_ID / ADZUNA_APP_KEY")
         return
-
+ 
     IMPORT_STATUS.update(running=True, added=0, updated=0, errors=0, fetched=0, deactivated=0)
     db = SessionLocal()
     base = "https://api.adzuna.com/v1/api/jobs/pl/search"
@@ -447,8 +464,8 @@ def run_import(max_pages_big=4, max_pages_small=1):
         db.close()
         IMPORT_STATUS["running"] = False
         IMPORT_STATUS["last_run"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-
-
+ 
+ 
 def _upsert_offer(db, ad):
     ext = str(ad.get("id") or "")
     if not ext:
@@ -459,14 +476,13 @@ def _upsert_offer(db, ad):
     spec = _adzuna_classify(blob) or "Pielęgniarstwo (ogólne)"
     salary_min = ad.get("salary_min")
     predicted = str(ad.get("salary_is_predicted")) == "1"
-    company = (ad.get("company", {}) or {}).get("display_name") or title or "Pracodawca z ogłoszenia"
-
+ 
     existing = db.query(Offer).filter(
         Offer.source == "adzuna", Offer.external_id == ext
     ).first()
-
+ 
     fields = dict(
-        place=company[:160], city=_adzuna_city(ad), spec=spec, min_years=0,
+        place=_adzuna_place(ad), city=_adzuna_city(ad), spec=spec, min_years=0,
         forma=_adzuna_forma(ad), tryb=_adzuna_tryb(blob),
         salary=int(salary_min) if salary_min else 0,
         salary_predicted=predicted, note=desc[:300],
@@ -480,8 +496,8 @@ def _upsert_offer(db, ad):
     else:
         db.add(Offer(created_at=datetime.utcnow(), **fields))
         IMPORT_STATUS["added"] += 1
-
-
+ 
+ 
 @app.get("/internal/sync")
 def internal_sync(token: str = "", background: BackgroundTasks = None):
     secret = os.environ.get("SYNC_TOKEN")
@@ -493,15 +509,29 @@ def internal_sync(token: str = "", background: BackgroundTasks = None):
         return {"status": "import już trwa", **IMPORT_STATUS}
     background.add_task(run_import)
     return {"status": "import uruchomiony w tle — sprawdź /internal/sync-status za ~minutę"}
-
-
+ 
+ 
+@app.get("/internal/cleanup-seed")
+def cleanup_seed(token: str = "", db: Session = Depends(get_db)):
+    secret = os.environ.get("SYNC_TOKEN")
+    if not secret or token != secret:
+        raise HTTPException(403, "Zły lub brakujący token")
+    seedy = db.query(Offer).filter(Offer.source != "adzuna").all()
+    n = len(seedy)
+    for o in seedy:
+        db.delete(o)
+    db.commit()
+    pozostalo = db.query(Offer).filter(Offer.active == True).count()
+    return {"usunieto_ofert_seedowych": n, "pozostalo_ofert": pozostalo}
+ 
+ 
 @app.get("/internal/sync-status")
 def internal_sync_status(db: Session = Depends(get_db)):
     total = db.query(Offer).filter(Offer.active == True).count()
     adzuna = db.query(Offer).filter(Offer.source == "adzuna", Offer.active == True).count()
     return {"aktywne_oferty": total, "z_adzuny": adzuna, **IMPORT_STATUS}
-
-
+ 
+ 
 # --------------------------------------------------------------------------
 # DIAGNOSTYKA ADZUNY (jednorazowy test jakości danych — uruchamiany z przeglądarki)
 # Wymaga zmiennych środowiskowych ADZUNA_APP_ID i ADZUNA_APP_KEY na Render.
@@ -520,7 +550,7 @@ ADZUNA_QUERIES = [
     "pielęgniarka POZ", "pielęgniarka środowiskowo-rodzinna",
     "pielęgniarka rodzinna", "położna",
 ]
-
+ 
 ADZUNA_SPEC_KEYWORDS = {
     "Anestezjologiczne i intensywna terapia": ["anestezjolog", "intensywn", "oit", "oiom", "respirator"],
     "Ratunkowe / SOR": ["ratunkow", "sor", "izba przyjęć", "ratownict"],
@@ -533,16 +563,16 @@ ADZUNA_SPEC_KEYWORDS = {
     "Pediatryczne / neonatologiczne": ["pediatr", "neonatolog", "dziecięc", "noworodk"],
     "Geriatryczne / opieka długoterminowa": ["geriatr", "długoterminow", "zol", "opiekuńcz", "paliatywn"],
 }
-
-
+ 
+ 
 def _adzuna_classify(text):
     t = (text or "").lower()
     for spec, kws in ADZUNA_SPEC_KEYWORDS.items():
         if any(k in t for k in kws):
             return spec
     return None
-
-
+ 
+ 
 @app.get("/internal/adzuna-test")
 def adzuna_test():
     import time
@@ -550,14 +580,14 @@ def adzuna_test():
     import urllib.request
     import urllib.parse
     from fastapi.responses import HTMLResponse
-
+ 
     app_id = os.environ.get("ADZUNA_APP_ID")
     app_key = os.environ.get("ADZUNA_APP_KEY")
     if not app_id or not app_key:
         return HTMLResponse(
             "<h2>Brak kluczy Adzuny</h2><p>Dodaj na Render zmienne środowiskowe "
             "<b>ADZUNA_APP_ID</b> i <b>ADZUNA_APP_KEY</b>, potem odśwież tę stronę.</p>")
-
+ 
     base = "https://api.adzuna.com/v1/api/jobs/pl/search/1"
     seen, counts, errors = {}, {}, 0
     for q in ADZUNA_QUERIES:
@@ -575,33 +605,33 @@ def adzuna_test():
             errors += 1
             counts[q] = f"błąd: {e}"
         time.sleep(0.5)
-
+ 
     ads = list(seen.values())
     n = len(ads)
     if n == 0:
         return HTMLResponse(f"<h2>Brak ofert w próbce</h2><p>Błędów: {errors}. "
                             "Sprawdź klucze lub limit konta Adzuny.</p>")
-
+ 
     real_sal = sum(1 for a in ads if a.get("salary_min") and str(a.get("salary_is_predicted")) == "0")
     pred_sal = sum(1 for a in ads if a.get("salary_min") and str(a.get("salary_is_predicted")) == "1")
     no_sal = n - real_sal - pred_sal
     contract = sum(1 for a in ads if a.get("contract_type") or a.get("contract_time"))
     classified = sum(1 for a in ads if _adzuna_classify(a.get("title", "") + " " + a.get("description", "")))
-
+ 
     def pct(x):
         return f"{x} ({round(100 * x / n)}%)"
-
+ 
     rows = ""
     for q in ADZUNA_QUERIES:
         rows += f"<tr><td>{q}</td><td style='text-align:right'>{counts.get(q, '-')}</td></tr>"
-
+ 
     samples = ""
     for a in ads[:12]:
         spec = _adzuna_classify(a.get("title", "") + " " + a.get("description", "")) or "—"
         loc = (a.get("location", {}) or {}).get("display_name", "?")
         title = (a.get("title", "") or "")[:70]
         samples += f"<tr><td>{title}</td><td>{loc}</td><td>{spec}</td></tr>"
-
+ 
     html = f"""
     <html><head><meta charset='utf-8'><title>Adzuna — test</title>
     <style>body{{font-family:sans-serif;max-width:900px;margin:30px auto;padding:0 16px;color:#18302B}}
@@ -622,12 +652,12 @@ def adzuna_test():
     <p style='color:#6B7F79;font-size:13px'>Skopiuj te liczby i wklej w rozmowie — na ich podstawie ustawimy regułę wynagrodzenia i sposób mapowania specjalizacji.</p>
     </body></html>"""
     return HTMLResponse(html)
-
-
+ 
+ 
 # frontend (ten sam serwer — jeden URL, zero CORS)
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-
+ 
+ 
 @app.get("/")
 def index():
     return FileResponse("static/index.html")
