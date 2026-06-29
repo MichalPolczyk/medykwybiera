@@ -13,12 +13,16 @@ Lokalnie domyślnie używany jest plik SQLite (dyzur.db).
 
 import os
 import math
+import hashlib
+import secrets
+import base64
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Integer, String, Float, Boolean, DateTime, text
 from sqlalchemy.orm import (
@@ -42,6 +46,15 @@ class Base(DeclarativeBase):
     pass
 
 
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Nurse(Base):
     __tablename__ = "nurses"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -54,6 +67,10 @@ class Nurse(Base):
     max_km: Mapped[int] = mapped_column(Integer, default=50)
     expected: Mapped[int] = mapped_column(Integer, default=0)
     note: Mapped[str] = mapped_column(String, default="")
+    # powiązanie z kontem + zgody
+    user_id: Mapped[int] = mapped_column(Integer, index=True, default=0)
+    notify_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    rodo_consent_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
 
 class Offer(Base):
@@ -242,7 +259,8 @@ class OfferIn(BaseModel):
 def nurse_dict(n: Nurse) -> dict:
     return {"id": n.id, "name": n.name, "city": n.city, "spec": n.spec,
             "years": n.years, "forma": n.forma, "tryb": n.tryb,
-            "max_km": n.max_km, "expected": n.expected, "note": n.note}
+            "max_km": n.max_km, "expected": n.expected, "note": n.note,
+            "notify_enabled": bool(getattr(n, "notify_enabled", True))}
 
 
 def offer_dict(o: Offer) -> dict:
@@ -315,15 +333,171 @@ def migrate_offers():
                 pass  # np. SQLite bez IF NOT EXISTS — kolumna już jest
 
 
+def migrate_nurses():
+    """Dodaje kolumny konta i zgód do tabeli nurses, bez kasowania danych."""
+    alters = [
+        "ALTER TABLE nurses ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT 0",
+        "ALTER TABLE nurses ADD COLUMN IF NOT EXISTS notify_enabled BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE nurses ADD COLUMN IF NOT EXISTS rodo_consent_at TIMESTAMP",
+    ]
+    with engine.begin() as conn:
+        for stmt in alters:
+            try:
+                conn.execute(text(stmt))
+            except Exception:
+                pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     migrate_offers()
+    migrate_nurses()
     seed_if_empty()
     yield
 
 
-app = FastAPI(title="Dyżur API", lifespan=lifespan)
+app = FastAPI(title="MedykWybiera API", lifespan=lifespan)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.environ.get("SECRET_KEY", "dev-insecure-change-me"),
+    max_age=60 * 60 * 24 * 30,  # 30 dni
+    same_site="lax",
+)
+
+
+# --------------------------------------------------------------------------
+# AUTORYZACJA (e-mail + hasło, sesja w podpisanym ciasteczku)
+# --------------------------------------------------------------------------
+def hash_password(pw: str) -> str:
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, 200_000)
+    return base64.b64encode(salt).decode() + "$" + base64.b64encode(dk).decode()
+
+
+def verify_password(pw: str, stored: str) -> bool:
+    try:
+        salt_b64, dk_b64 = stored.split("$")
+        salt = base64.b64decode(salt_b64)
+        dk = base64.b64decode(dk_b64)
+        test = hashlib.pbkdf2_hmac("sha256", pw.encode("utf-8"), salt, 200_000)
+        return secrets.compare_digest(dk, test)
+    except Exception:
+        return False
+
+
+def current_user(request: Request, db: Session = Depends(get_db)):
+    uid = request.session.get("uid")
+    if not uid:
+        return None
+    return db.get(User, uid)
+
+
+def require_user(request: Request, db: Session = Depends(get_db)) -> User:
+    u = current_user(request, db)
+    if not u:
+        raise HTTPException(401, "Wymagane logowanie")
+    return u
+
+
+class AuthIn(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/register")
+def register(data: AuthIn, request: Request, db: Session = Depends(get_db)):
+    email = data.email.strip().lower()
+    if "@" not in email or "." not in email:
+        raise HTTPException(400, "Podaj poprawny adres e-mail")
+    if len(data.password) < 6:
+        raise HTTPException(400, "Hasło musi mieć co najmniej 6 znaków")
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(409, "Konto z tym adresem już istnieje. Zaloguj się.")
+    u = User(email=email, hashed_password=hash_password(data.password))
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+    request.session["uid"] = u.id
+    return {"email": u.email}
+
+
+@app.post("/api/login")
+def login(data: AuthIn, request: Request, db: Session = Depends(get_db)):
+    email = data.email.strip().lower()
+    u = db.query(User).filter(User.email == email).first()
+    if not u or not verify_password(data.password, u.hashed_password):
+        raise HTTPException(401, "Nieprawidłowy e-mail lub hasło")
+    request.session["uid"] = u.id
+    return {"email": u.email}
+
+
+@app.post("/api/logout")
+def logout(request: Request):
+    request.session.clear()
+    return {"ok": True}
+
+
+@app.get("/api/me")
+def me(request: Request, db: Session = Depends(get_db)):
+    u = current_user(request, db)
+    if not u:
+        return {"logged_in": False}
+    nurse = db.query(Nurse).filter(Nurse.user_id == u.id).first()
+    return {"logged_in": True, "email": u.email,
+            "has_profile": nurse is not None,
+            "profile": nurse_dict(nurse) if nurse else None}
+
+
+class ProfileIn(BaseModel):
+    name: str = ""
+    city: str
+    spec: str
+    years: int = 0
+    forma: str
+    tryb: str
+    max_km: int = 50
+    expected: int = 0
+    note: str = ""
+    notify_enabled: bool = True
+    rodo_consent: bool = False
+
+
+@app.post("/api/profile")
+def save_profile(data: ProfileIn, user: User = Depends(require_user), db: Session = Depends(get_db)):
+    if not data.rodo_consent:
+        raise HTTPException(400, "Wymagana zgoda na przetwarzanie danych (RODO)")
+    nurse = db.query(Nurse).filter(Nurse.user_id == user.id).first()
+    fields = dict(
+        name=data.name or user.email.split("@")[0], city=data.city.strip() or "Wrocław",
+        spec=data.spec, years=data.years, forma=data.forma, tryb=data.tryb,
+        max_km=data.max_km or 50, expected=data.expected or 0, note=data.note,
+        notify_enabled=data.notify_enabled,
+    )
+    if nurse:
+        for k, v in fields.items():
+            setattr(nurse, k, v)
+    else:
+        nurse = Nurse(user_id=user.id, rodo_consent_at=datetime.utcnow(), **fields)
+        db.add(nurse)
+    if not nurse.rodo_consent_at:
+        nurse.rodo_consent_at = datetime.utcnow()
+    db.commit()
+    db.refresh(nurse)
+    return nurse_dict(nurse)
+
+
+@app.get("/api/my-matches")
+def my_matches(user: User = Depends(require_user), db: Session = Depends(get_db)):
+    nurse = db.query(Nurse).filter(Nurse.user_id == user.id).first()
+    if not nurse:
+        raise HTTPException(404, "Najpierw uzupełnij profil")
+    results = []
+    for o in db.query(Offer).filter(Offer.active == True):
+        s = score(nurse, o)
+        results.append({"item": offer_dict(o), **s})
+    results.sort(key=lambda r: r["total"], reverse=True)
+    return results
 
 
 @app.get("/api/nurses")
