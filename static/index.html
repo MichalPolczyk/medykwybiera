@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>MedykWybiera — dopasowanie pielęgniarek i ofert</title>
+<title>MedykWybiera — oferty dopasowane do Ciebie</title>
 <style>
   :root{
     --bg:#EEF1EF; --surface:#fff; --ink:#18302B; --sage:#3F7A6B;
@@ -12,33 +12,38 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-  .wrap{max-width:860px;margin:0 auto;padding:28px 20px 64px}
-  header{display:flex;align-items:baseline;gap:10px}
-  .logo{font-size:26px;font-weight:800;letter-spacing:-.02em}
-  .dot{color:var(--sage);font-size:26px;font-weight:800}
-  .sub{color:var(--muted);font-size:13px}
-  .lead{color:var(--muted);font-size:14.5px;margin-top:6px;max-width:560px;line-height:1.5}
-  .toggle{display:inline-flex;background:var(--surface);border:1px solid var(--line);
-    border-radius:10px;padding:4px;margin-top:18px}
-  .toggle button{border:none;cursor:pointer;padding:8px 16px;border-radius:7px;font-size:14px;
-    font-weight:600;background:transparent;color:var(--muted);font-family:inherit}
-  .toggle button.on{background:var(--sage);color:#fff}
-  .row{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center}
-  select,input{padding:10px 12px;border-radius:8px;border:1px solid var(--line);
-    background:var(--surface);color:var(--ink);font-size:14px;font-family:inherit;width:100%}
-  .pick{flex:1;min-width:240px}
-  .btn{border:1px solid var(--sage);background:transparent;color:var(--sage);padding:10px 14px;
-    border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
-  .btn.solid{background:var(--sage);color:#fff;border:none}
-  .btn.dark{background:var(--ink);color:#fff;border:none}
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px}
-  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-  .tag{font-size:11.5px;color:var(--sage);background:var(--sageSoft);padding:3px 8px;border-radius:999px;white-space:nowrap}
-  .note{color:var(--muted);font-size:13.5px;margin-top:10px;line-height:1.5}
-  h2.section{font-size:15px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;margin:28px 0 4px}
+  .wrap{max-width:680px;margin:0 auto;padding:24px 18px 64px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+  .brand{display:flex;align-items:baseline;gap:2px}
+  .logo{font-size:24px;font-weight:800;letter-spacing:-.02em}
+  .dot{color:var(--sage);font-size:24px;font-weight:800}
+  .who{font-size:13px;color:var(--muted)}
+  .who a{color:var(--sage);cursor:pointer;text-decoration:none;font-weight:600;margin-left:10px}
+  .lead{color:var(--muted);font-size:14.5px;margin-top:6px;line-height:1.5}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:18px}
+  h2{font-size:18px;margin:0 0 4px}
+  label{font-size:12.5px;color:var(--muted);margin:12px 0 4px;display:block}
+  input,select{width:100%;padding:11px 12px;border-radius:9px;border:1px solid var(--line);
+    background:#fff;color:var(--ink);font-size:15px;font-family:inherit}
+  .btn{width:100%;border:none;background:var(--sage);color:#fff;border-radius:10px;
+    padding:13px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:16px}
+  .btn.ghost{background:transparent;border:1px solid var(--sage);color:var(--sage)}
+  .tabs{display:inline-flex;background:var(--bg);border-radius:10px;padding:4px;margin-bottom:6px}
+  .tabs button{border:none;background:transparent;color:var(--muted);padding:8px 16px;border-radius:7px;
+    font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+  .tabs button.on{background:var(--sage);color:#fff}
+  .err{background:#FDECEA;color:#B3261E;border-radius:8px;padding:10px 12px;font-size:13.5px;margin-top:12px;display:none}
+  .row2{display:flex;gap:12px}.row2>div{flex:1}
+  .check{display:flex;gap:9px;align-items:flex-start;margin-top:14px;font-size:13.5px;color:var(--ink);line-height:1.45}
+  .check input{width:auto;margin-top:2px}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .section-h{display:flex;align-items:baseline;justify-content:space-between;margin:26px 0 4px}
+  .section-h h2{font-size:15px;text-transform:uppercase;letter-spacing:.02em}
   .match{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:10px}
   .match .top{display:flex;gap:14px;padding:16px;align-items:center}
   .name{font-weight:700;font-size:15.5px}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .tag{font-size:11.5px;color:var(--sage);background:var(--sageSoft);padding:3px 8px;border-radius:999px;white-space:nowrap}
   .tier{margin-top:8px;font-size:12.5px;font-weight:600}
   .details{padding:0 16px 16px;border-top:1px solid var(--line)}
   .bar{display:flex;align-items:center;gap:8px;font-size:12px;margin-top:7px}
@@ -46,221 +51,208 @@
   .bar .track{flex:1;height:6px;background:var(--line);border-radius:4px;overflow:hidden}
   .bar .fill{height:100%;background:var(--sage);border-radius:4px}
   .bar .val{width:38px;text-align:right;font-variant-numeric:tabular-nums}
-  .formgrid{display:flex;flex-wrap:wrap;gap:12px}
-  .field{flex:1 1 180px;min-width:150px}
-  .field label{font-size:12px;color:var(--muted);margin-bottom:4px;display:block}
-  .small{font-size:12px;color:var(--muted);margin:10px 0 0}
-  .foot{color:var(--muted);font-size:12px;margin-top:28px;line-height:1.5;text-align:center}
+  .note{color:var(--muted);font-size:13px;margin-top:12px;line-height:1.5}
+  .info{background:var(--sageSoft);border-radius:10px;padding:12px 14px;font-size:13.5px;line-height:1.5;margin-top:12px}
+  .muted{color:var(--muted);font-size:12.5px}
+  .center{text-align:center}
+  a.offer{display:inline-block;margin-top:4px;color:#fff;background:var(--sage);
+    padding:9px 14px;border-radius:8px;text-decoration:none;font-size:13.5px;font-weight:600}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <span class="logo">MedykWybiera</span><span class="dot">.</span>
-    <span class="sub">prototyp dopasowania</span>
+    <div class="brand"><span class="logo">MedykWybiera</span><span class="dot">.</span></div>
+    <div class="who" id="who"></div>
   </header>
-  <p class="lead" id="lead"></p>
-
-  <div class="toggle">
-    <button id="m-nurse" class="on" onclick="setMode('nurse')">Jestem pielęgniarką</button>
-    <button id="m-emp" onclick="setMode('employer')">Jestem pracodawcą</button>
-  </div>
-
-  <div class="row">
-    <select class="pick" id="picker" onchange="onPick()"></select>
-    <button class="btn" id="addBtn" onclick="toggleForm()">+ Dodaj</button>
-  </div>
-
-  <div id="formBox"></div>
-  <div id="activeBox"></div>
-
-  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:8px">
-    <h2 class="section">Poranna dziesiątka</h2>
-    <span class="sub" id="matchHint"></span>
-  </div>
-  <div id="matches"></div>
-
-  <p class="foot">Prototyp z prawdziwą bazą. Dane zapisują się na serwerze. Bez logowania,
-    weryfikacji PWZ i warstwy RODO — to kolejne kroki.</p>
+  <div id="app"></div>
 </div>
 
 <script>
 const SPECS = ["Anestezjologiczne i intensywna terapia","Ratunkowe / SOR","Chirurgiczne / blok operacyjny","Internistyczne / zachowawcze","Kardiologiczne","Onkologiczne","Dializoterapia / nefrologiczne","POZ / środowiskowo-rodzinne","Pediatryczne / neonatologiczne","Geriatryczne / opieka długoterminowa"];
 const FORMY = ["Umowa o pracę","Umowa zlecenie","Kontrakt B2B","Dowolna"];
 const TRYBY = ["Jednozmianowy (dzienny)","Zmianowy (w tym noce)","Dowolny"];
-const CITIES = ["Warszawa","Kraków","Wrocław","Poznań","Gdańsk","Katowice","Łódź","Rzeszów","Jasło","Lublin","Bydgoszcz","Szczecin"];
+const CITIES = ["Wrocław","Wałbrzych","Legnica","Jelenia Góra","Lubin","Głogów","Świdnica","Bolesławiec","Oleśnica","Oława","Dzierżoniów","Kłodzko","Zgorzelec","Polkowice","Trzebnica","Ząbkowice Śląskie","Lubań","Złotoryja","Jawor","Bielawa","Nowa Ruda","Kamienna Góra","Strzelin","Środa Śląska","Milicz","Wołów","Góra","Brzeg Dolny"];
 
-let mode = "nurse";
-let list = [];
-let selId = null;
-let formOpen = false;
+const app = document.getElementById("app");
+const who = document.getElementById("who");
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const tierColor = t => t>=85?"var(--coral)":t>=70?"var(--sage)":t>=50?"var(--amber)":"var(--muted)";
+const tierLabel = t => t>=85?"Doskonałe":t>=70?"Wysokie":t>=50?"Średnie":"Niskie";
 
-const tierColor = t => t>=80?"var(--coral)":t>=60?"var(--sage)":t>=40?"var(--amber)":"var(--muted)";
-const tierLabel = t => t>=80?"Bardzo wysokie":t>=60?"Wysokie":t>=40?"Średnie":"Niskie";
-const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-
-async function load(){
-  const url = mode==="nurse" ? "/api/nurses" : "/api/offers";
-  list = await (await fetch(url)).json();
-  if(!list.find(x=>x.id===selId)) selId = list.length ? list[0].id : null;
-  renderPicker(); renderActive(); await renderMatches();
+async function api(method, path, body){
+  const r = await fetch(path, {method, headers:{"Content-Type":"application/json"},
+    body: body?JSON.stringify(body):undefined});
+  let data=null; try{ data=await r.json(); }catch(e){}
+  if(!r.ok) throw new Error((data&&data.detail)||"Błąd serwera");
+  return data;
 }
 
-function setMode(m){
-  mode=m; selId=null; formOpen=false;
-  document.getElementById("m-nurse").className = m==="nurse"?"on":"";
-  document.getElementById("m-emp").className = m==="employer"?"on":"";
-  document.getElementById("addBtn").textContent = m==="nurse"?"+ Dodaj pielęgniarkę":"+ Dodaj ofertę";
-  document.getElementById("formBox").innerHTML="";
-  document.getElementById("lead").textContent =
-    "Odwrócona rekrutacja dla pielęgniarek. Wybierz profil, a system pokaże najlepiej dopasowane "
-    + (m==="nurse"?"oferty":"kandydatki") + " — z wyliczonym wynikiem i powodem.";
-  document.getElementById("matchHint").textContent =
-    (m==="nurse"?"oferty dla Ciebie":"kandydatki dla Ciebie") + ", wg dopasowania";
-  load();
+let state = null;
+async function refresh(){ state = await api("GET","/api/me"); render(); }
+
+function render(){
+  if(!state || !state.logged_in){ who.innerHTML=""; return showAuth(); }
+  who.innerHTML = `${esc(state.email)} <a onclick="doLogout()">Wyloguj</a>`;
+  if(!state.has_profile) return showProfile(null);
+  return showMatches();
 }
 
-function onPick(){ selId = Number(document.getElementById("picker").value); renderActive(); renderMatches(); }
-
-function renderPicker(){
-  const p = document.getElementById("picker");
-  p.innerHTML = list.map(x=>{
-    const label = mode==="nurse" ? `${x.name} — ${x.spec}` : `${x.place} — ${x.spec}`;
-    return `<option value="${x.id}" ${x.id===selId?"selected":""}>${esc(label)}</option>`;
-  }).join("");
-}
-
-function renderActive(){
-  const a = list.find(x=>x.id===selId);
-  const box = document.getElementById("activeBox");
-  if(!a){ box.innerHTML=""; return; }
-  const title = mode==="nurse"?a.name:a.place;
-  const expTag = mode==="nurse"?`${a.years} lat dośw.`:`min. ${a.min_years} lat`;
-  const payTag = mode==="nurse"?`oczek. ${a.expected||"—"} zł`:`${a.salary} zł`;
-  box.innerHTML = `<div class="card">
-    <div class="name">${esc(title)}</div>
-    <div class="tags">
-      <span class="tag">${esc(a.spec)}</span><span class="tag">${esc(a.city)}</span>
-      <span class="tag">${expTag}</span><span class="tag">${esc(a.forma)}</span>
-      <span class="tag">${esc(a.tryb)}</span><span class="tag">${payTag}</span>
+/* ---------- LOGOWANIE / REJESTRACJA ---------- */
+let authMode = "login";
+function showAuth(){
+  app.innerHTML = `
+  <p class="lead">Załóż profil pielęgniarki, a my pokażemy Ci oferty pracy dopasowane do Twojej specjalizacji i okolicy. Gdy pojawią się nowe pasujące oferty, damy Ci znać mailem.</p>
+  <div class="card">
+    <div class="tabs">
+      <button id="t-login" class="${authMode==='login'?'on':''}" onclick="setAuth('login')">Logowanie</button>
+      <button id="t-reg" class="${authMode==='register'?'on':''}" onclick="setAuth('register')">Rejestracja</button>
     </div>
-    <p class="note">${esc(a.note)}</p></div>`;
+    <label>Adres e-mail</label>
+    <input id="a-email" type="email" placeholder="np. anna.kowalska@wp.pl" autocomplete="email">
+    <label>Hasło</label>
+    <input id="a-pass" type="password" placeholder="${authMode==='register'?'min. 6 znaków':'Twoje hasło'}" autocomplete="${authMode==='register'?'new-password':'current-password'}">
+    <div class="err" id="a-err"></div>
+    <button class="btn" onclick="doAuth()">${authMode==='register'?'Załóż konto':'Zaloguj się'}</button>
+    ${authMode==='register'?'<p class="hint">Rejestrując się, zakładasz konto, do którego przypiszemy Twój profil i powiadomienia o ofertach.</p>':''}
+  </div>`;
+}
+function setAuth(m){ authMode=m; showAuth(); }
+async function doAuth(){
+  const email=document.getElementById("a-email").value.trim();
+  const pass=document.getElementById("a-pass").value;
+  const err=document.getElementById("a-err");
+  err.style.display="none";
+  try{
+    await api("POST", authMode==='register'?"/api/register":"/api/login", {email, password:pass});
+    await refresh();
+  }catch(e){ err.textContent=e.message; err.style.display="block"; }
 }
 
+/* ---------- FORMULARZ PROFILU ---------- */
+function opts(arr,sel){ return arr.map(x=>`<option ${x===sel?"selected":""}>${esc(x)}</option>`).join(""); }
+function showProfile(p){
+  const editing = !!p;
+  app.innerHTML = `
+  <p class="lead">${editing?'Zaktualizuj swój profil.':'Uzupełnij profil. Na jego podstawie dobierzemy oferty z Dolnego Śląska.'}</p>
+  <div class="card">
+    <h2>Twój profil</h2>
+    <datalist id="cl">${CITIES.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
+    <label>Imię (opcjonalnie)</label>
+    <input id="p-name" value="${esc(p?p.name:'')}" placeholder="np. Anna">
+    <label>Miasto</label>
+    <input id="p-city" list="cl" value="${esc(p?p.city:'')}" placeholder="np. Wrocław, Legnica, Kłodzko">
+    <label>Specjalizacja</label>
+    <select id="p-spec">${opts(SPECS, p?p.spec:'')}</select>
+    <div class="row2">
+      <div><label>Lata doświadczenia</label><input id="p-years" type="number" min="0" value="${p?p.years:0}"></div>
+      <div><label>Maks. dojazd (km)</label><input id="p-km" type="number" min="0" value="${p?p.max_km:40}"></div>
+    </div>
+    <label>Preferowana forma zatrudnienia</label>
+    <select id="p-forma">${opts(FORMY, p?p.forma:'Dowolna')}</select>
+    <label>Preferowany tryb pracy</label>
+    <select id="p-tryb">${opts(TRYBY, p?p.tryb:'Dowolny')}</select>
+    <label>Oczekiwane wynagrodzenie netto / mies. (opcjonalnie)</label>
+    <input id="p-pay" type="number" min="0" value="${p&&p.expected?p.expected:''}" placeholder="np. 7000">
+    <div class="check">
+      <input type="checkbox" id="p-notify" ${(!p||p.notify_enabled)?'checked':''}>
+      <span>Chcę dostawać mailem powiadomienia o nowych dopasowanych ofertach.</span>
+    </div>
+    <div class="check">
+      <input type="checkbox" id="p-rodo">
+      <span>Wyrażam zgodę na przetwarzanie moich danych w celu dopasowywania ofert pracy (RODO).</span>
+    </div>
+    <div class="err" id="p-err"></div>
+    <button class="btn" onclick="saveProfile()">${editing?'Zapisz zmiany':'Zapisz profil i zobacz dopasowania'}</button>
+  </div>`;
+}
+async function saveProfile(){
+  const v=id=>document.getElementById(id).value;
+  const err=document.getElementById("p-err"); err.style.display="none";
+  const body={
+    name:v("p-name").trim(), city:v("p-city").trim(), spec:v("p-spec"),
+    years:Number(v("p-years"))||0, max_km:Number(v("p-km"))||40,
+    forma:v("p-forma"), tryb:v("p-tryb"), expected:Number(v("p-pay"))||0,
+    notify_enabled:document.getElementById("p-notify").checked,
+    rodo_consent:document.getElementById("p-rodo").checked,
+  };
+  if(!body.city){ err.textContent="Podaj miasto."; err.style.display="block"; return; }
+  try{ await api("POST","/api/profile",body); await refresh(); }
+  catch(e){ err.textContent=e.message; err.style.display="block"; }
+}
+
+/* ---------- DOPASOWANIA ---------- */
 function ring(v){
   const r=26,c=2*Math.PI*r,off=c*(1-v/100);
   return `<svg width="64" height="64" viewBox="0 0 64 64">
     <circle cx="32" cy="32" r="${r}" fill="none" stroke="var(--line)" stroke-width="6"/>
     <circle cx="32" cy="32" r="${r}" fill="none" stroke="${tierColor(v)}" stroke-width="6"
-      stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"
-      transform="rotate(-90 32 32)"/>
+      stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}" transform="rotate(-90 32 32)"/>
     <text x="32" y="33" text-anchor="middle" dominant-baseline="middle"
       style="font-size:19px;font-weight:800;fill:var(--ink)">${v}</text></svg>`;
 }
+function bar(label,v,max){return `<div class="bar"><span class="lab">${label}</span>
+  <span class="track"><span class="fill" style="width:${v/max*100}%"></span></span>
+  <span class="val">${v}/${max}</span></div>`;}
 
-function bar(label,v,max){
-  return `<div class="bar"><span class="lab">${label}</span>
-    <span class="track"><span class="fill" style="width:${v/max*100}%"></span></span>
-    <span class="val">${v}/${max}</span></div>`;
-}
-
-async function renderMatches(){
-  const box = document.getElementById("matches");
-  if(!selId){ box.innerHTML = `<p class="small">Brak profilu. Dodaj pierwszy, aby zobaczyć dopasowania.</p>`; return; }
-  const res = await (await fetch(`/api/match?role=${mode}&id=${selId}`)).json();
-  box.innerHTML = res.slice(0,10).map(m=>{
-    const it=m.item, title = mode==="nurse"?it.place:it.name;
-    return `<div class="match">
-      <div class="top">
-        ${ring(m.total)}
-        <div style="flex:1;min-width:0">
-          <div class="name">${esc(title)}</div>
-          <div class="tags">
-            <span class="tag">${esc(it.spec)}</span>
-            <span class="tag">${esc(it.city)} · ${m.distance} km</span>
-            <span class="tag">${esc(it.forma)}</span>
-          </div>
-          <div class="tier" style="color:${tierColor(m.total)}">Dopasowanie: ${tierLabel(m.total)}</div>
-        </div>
-        <button class="btn" onclick="toggleDet(this)">Szczegóły</button>
-      </div>
-      <div class="details" style="display:none">
-        ${bar("Specjalizacja",m.parts.spec,20)}${bar("Lokalizacja",m.parts.loc,20)}
-        ${bar("Forma",m.parts.forma,15)}${bar("Tryb pracy",m.parts.tryb,10)}
-        ${bar("Doświadczenie",m.parts.exp,10)}${bar("Wynagrodzenie",m.parts.sal,25)}
-        <p class="note">${esc(it.note)}</p>
-        ${it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener"
-          style="display:inline-block;margin-top:4px;color:#fff;background:var(--sage);
-          padding:9px 14px;border-radius:8px;text-decoration:none;font-size:13.5px;font-weight:600">
-          Zobacz pełną ofertę →</a>` : ""}
-        ${it.salary_predicted ? `<p class="small">Wynagrodzenie szacowane przez Adzunę, nie podane przez pracodawcę.</p>` : ""}
-      </div></div>`;
-  }).join("");
-}
-
-function toggleDet(btn){
-  const d = btn.closest(".match").querySelector(".details");
-  const open = d.style.display!=="none";
-  d.style.display = open?"none":"block";
-  btn.textContent = open?"Szczegóły":"Zwiń";
-}
-
-function toggleForm(){
-  formOpen=!formOpen;
-  document.getElementById("formBox").innerHTML = formOpen?formHTML():"";
-}
-
-function opts(arr,sel){ return arr.map(x=>`<option ${x===sel?"selected":""}>${esc(x)}</option>`).join(""); }
-
-function formHTML(){
-  const isN = mode==="nurse";
-  return `<div class="card" style="border-color:var(--sage)">
-    <datalist id="cl">${CITIES.map(c=>`<option value="${esc(c)}">`).join("")}</datalist>
-    <div class="formgrid">
-      <div class="field"><label>${isN?"Imię / inicjały":"Nazwa placówki"}</label>
-        <input id="f_a" placeholder="${isN?"np. Anna K.":"np. Szpital Powiatowy"}"></div>
-      <div class="field"><label>Miasto (wpisz dowolne)</label>
-        <input id="f_city" list="cl" placeholder="np. Sieradz, Tarnów…"></div>
-      <div class="field"><label>Specjalizacja</label><select id="f_spec">${opts(SPECS)}</select></div>
-      <div class="field"><label>${isN?"Lata doświadczenia":"Min. lata doświadczenia"}</label>
-        <input id="f_years" type="number" value="${isN?5:3}"></div>
-      <div class="field"><label>Forma zatrudnienia</label><select id="f_forma">${opts(FORMY)}</select></div>
-      <div class="field"><label>Tryb pracy</label><select id="f_tryb">${opts(TRYBY)}</select></div>
-      <div class="field"><label>${isN?"Oczekiwane wynagr. (zł netto)":"Oferowane wynagr. (zł)"}</label>
-        <input id="f_pay" type="number" value="${isN?6500:7000}"></div>
-      ${isN?`<div class="field"><label>Maks. dojazd (km)</label><input id="f_km" type="number" value="50"></div>`:""}
-      <div style="flex:1 1 100%"><label style="font-size:12px;color:var(--muted)">Notatka</label>
-        <input id="f_note" placeholder="np. preferencje, kursy, dyspozycyjność"></div>
-    </div>
-    <p class="small">Miasto spoza listy: odległość liczona jako 150 km (do podmiany na geocoding).</p>
-    <button class="btn solid" style="margin-top:12px" onclick="submitForm()">
-      ${isN?"Dodaj i zobacz dopasowania":"Dodaj ofertę i zobacz kandydatki"}</button>
-  </div>`;
-}
-
-async function submitForm(){
-  const v = id => document.getElementById(id)?.value;
-  const isN = mode==="nurse";
-  const city = (v("f_city")||"").trim() || CITIES[0];
-  let body, url;
-  if(isN){
-    url="/api/nurses";
-    body={name:v("f_a")||"Nowa pielęgniarka",city,spec:v("f_spec"),years:Number(v("f_years"))||0,
-      forma:v("f_forma"),tryb:v("f_tryb"),max_km:Number(v("f_km"))||50,
-      expected:Number(v("f_pay"))||0,note:v("f_note")||"—"};
-  } else {
-    url="/api/offers";
-    body={place:v("f_a")||"Nowa placówka",city,spec:v("f_spec"),min_years:Number(v("f_years"))||0,
-      forma:v("f_forma"),tryb:v("f_tryb"),salary:Number(v("f_pay"))||0,note:v("f_note")||"—"};
+async function showMatches(){
+  app.innerHTML = `<p class="muted" style="margin-top:18px">Ładuję dopasowania…</p>`;
+  let res;
+  try{ res = await api("GET","/api/my-matches"); }
+  catch(e){ app.innerHTML=`<div class="card"><p>${esc(e.message)}</p></div>`; return; }
+  const p = state.profile;
+  let head = `
+    <div class="card">
+      <h2>Cześć${p&&p.name?', '+esc(p.name):''}.</h2>
+      <p class="muted">${esc(p.spec)} · ${esc(p.city)} · dojazd do ${p.max_km} km</p>
+      <button class="btn ghost" style="margin-top:12px" onclick="editProfile()">Edytuj profil</button>
+    </div>`;
+  if(!res.length){
+    app.innerHTML = head + `<div class="info">Na razie nie mamy ofert w Twoim regionie. Twój profil jest zapisany — gdy pojawią się dopasowane oferty, dostaniesz maila.</div>`;
+    return;
   }
-  const created = await (await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(body)})).json();
-  formOpen=false; document.getElementById("formBox").innerHTML="";
-  selId = created.id;
-  await load();
+  const top = res.slice(0,10);
+  const best = top[0].total;
+  const lowNote = best<70 ? `<div class="info">Na razie nie mamy ofert o wysokim dopasowaniu do Twojego profilu. Poniżej najbliższe, jakie są dostępne. Gdy pojawią się lepsze, powiadomimy Cię mailem.</div>` : "";
+  app.innerHTML = head
+    + `<div class="section-h"><h2>Oferty dla Ciebie</h2><span class="muted">wg dopasowania</span></div>`
+    + lowNote
+    + top.map(renderMatch).join("");
 }
+function renderMatch(m){
+  const it=m.item;
+  return `<div class="match">
+    <div class="top">
+      ${ring(m.total)}
+      <div style="flex:1;min-width:0">
+        <div class="name">${esc(it.place)}</div>
+        <div class="tags">
+          <span class="tag">${esc(it.spec)}</span>
+          <span class="tag">${esc(it.city)} · ${m.distance} km</span>
+          <span class="tag">${esc(it.forma)}</span>
+        </div>
+        <div class="tier" style="color:${tierColor(m.total)}">Dopasowanie: ${tierLabel(m.total)}</div>
+      </div>
+      <button class="btn ghost" style="width:auto;margin:0;padding:8px 12px;font-size:13px" onclick="toggleDet(this)">Szczegóły</button>
+    </div>
+    <div class="details" style="display:none">
+      ${bar("Specjalizacja",m.parts.spec,20)}${bar("Lokalizacja",m.parts.loc,20)}
+      ${bar("Forma",m.parts.forma,15)}${bar("Tryb pracy",m.parts.tryb,10)}
+      ${bar("Doświadczenie",m.parts.exp,10)}${bar("Wynagrodzenie",m.parts.sal,25)}
+      <p class="note">${esc(it.note)}</p>
+      ${it.url?`<a class="offer" href="${esc(it.url)}" target="_blank" rel="noopener">Zobacz pełną ofertę →</a>`:""}
+      ${it.salary_predicted?`<p class="hint">Wynagrodzenie szacowane, nie podane przez pracodawcę.</p>`:""}
+    </div></div>`;
+}
+function toggleDet(btn){
+  const d=btn.closest(".match").querySelector(".details");
+  const open=d.style.display!=="none";
+  d.style.display=open?"none":"block"; btn.textContent=open?"Szczegóły":"Zwiń";
+}
+function editProfile(){ showProfile(state.profile); }
+async function doLogout(){ await api("POST","/api/logout"); await refresh(); }
 
-setMode("nurse");
+refresh();
 </script>
 </body>
 </html>
