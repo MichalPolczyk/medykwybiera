@@ -134,6 +134,17 @@ async function refresh(){
   if(!SECTIONS) SECTIONS = await api("GET","/api/sections");
   state = await api("GET","/api/me"); render();
 }
+async function boot(){
+  app.innerHTML = '<p class="muted" style="margin-top:24px">Ładuję…</p>';
+  for(let i=0;i<6;i++){
+    try{ await refresh(); return; }
+    catch(e){
+      app.innerHTML = '<div class="card"><p class="muted" style="margin:0">Łączę z serwerem… To może potrwać kilkanaście sekund, jeśli serwer się wybudza.</p></div>';
+      await new Promise(r=>setTimeout(r, 3000));
+    }
+  }
+  app.innerHTML = '<div class="card"><p style="margin:0 0 8px">Nie udało się połączyć z serwerem.</p><button class="btn" onclick="boot()">Spróbuj ponownie</button></div>';
+}
 function render(){
   if(!state || !state.logged_in){ who.innerHTML=""; return showAuth(); }
   who.innerHTML = `${esc(state.email)} <a onclick="doLogout()">Wyloguj</a>`;
@@ -409,7 +420,7 @@ function toggleDet(btn){
 function editProfile(){ showProfile(state.profile); }
 async function doLogout(){ await api("POST","/api/logout"); await refresh(); }
 
-refresh();
+boot();
 </script>
 </body>
 </html>
