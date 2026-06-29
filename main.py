@@ -629,15 +629,16 @@ def send_email(to_email: str, subject: str, html: str) -> bool:
         return False
 
 
-def _email_shell(inner: str) -> str:
+def _email_shell(inner: str, adzuna: bool = False) -> str:
+    zrodlo = ("""<p style="font-size:11px;color:#6B7F79;margin-top:6px;line-height:1.5">
+        Część ofert oraz danych o wynagrodzeniach pochodzi z serwisu
+        <a href="https://www.adzuna.pl" style="color:#6B7F79">Adzuna</a>.</p>""" if adzuna else "")
     return f"""<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#18302B">
       <div style="font-size:22px;font-weight:800;padding:8px 0">{BRAND}<span style="color:#3F7A6B">.</span></div>
       {inner}
       <p style="font-size:11px;color:#6B7F79;margin-top:24px;line-height:1.5">
-        Oferty oraz dane o wynagrodzeniach pochodzą z serwisu
-        <a href="https://www.adzuna.pl" style="color:#6B7F79">Adzuna</a>.
-        Dostajesz tę wiadomość, bo zapisałeś profil w {BRAND} i włączyłeś powiadomienia.
-      </p>
+        Dostajesz tę wiadomość, bo zapisałeś profil w {BRAND} i włączyłeś powiadomienia.</p>
+      {zrodlo}
     </div>"""
 
 
@@ -679,7 +680,8 @@ def send_match_email(to_email, nurse, new_matches):
       <p style="margin-top:18px"><a href="{APP_URL}" style="background:#3F7A6B;color:#fff;
         padding:11px 18px;border-radius:8px;text-decoration:none;font-weight:600">Zobacz wszystkie dopasowania</a></p>"""
     subject = f"{n} {slowo} dla Ciebie — {BRAND}"
-    return send_email(to_email, subject, _email_shell(inner))
+    has_adzuna = any(getattr(o, "source", "") == "adzuna" for _, o in new_matches)
+    return send_email(to_email, subject, _email_shell(inner, adzuna=has_adzuna))
 
 
 def notify_new_matches(db=None) -> int:
