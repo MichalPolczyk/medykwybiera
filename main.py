@@ -76,6 +76,15 @@ class Nurse(Base):
     areas_detail: Mapped[str] = mapped_column(String, default="")    # surowe wybory (do edycji)
 
 
+class SentMatch(Base):
+    """Zapamiętuje, która oferta poszła już mailem do której pielęgniarki — bez dubli."""
+    __tablename__ = "sent_matches"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    nurse_id: Mapped[int] = mapped_column(Integer, index=True)
+    offer_id: Mapped[int] = mapped_column(Integer, index=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Offer(Base):
     __tablename__ = "offers"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -475,6 +484,10 @@ def register(data: AuthIn, request: Request, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(u)
     request.session["uid"] = u.id
+    try:
+        send_welcome(u.email)
+    except Exception:
+        pass  # mail powitalny nie może blokować rejestracji
     return {"email": u.email}
 
 
@@ -583,6 +596,130 @@ def my_matches(user: User = Depends(require_user), db: Session = Depends(get_db)
         results.append({"item": offer_dict(o), **s})
     results.sort(key=lambda r: r["total"], reverse=True)
     return results
+
+
+# --------------------------------------------------------------------------
+# POWIADOMIENIA MAILOWE (Brevo)
+# --------------------------------------------------------------------------
+NOTIFY_THRESHOLD = 70  # od tylu punktów dopasowanie trafia do maila
+BRAND = "MedykWybiera"
+APP_URL = "https://medykwybiera.onrender.com"
+
+
+def send_email(to_email: str, subject: str, html: str) -> bool:
+    key = os.environ.get("BREVO_API_KEY")
+    sender = os.environ.get("MAIL_FROM", "powiadomienia@medykwybiera.pl")
+    if not key:
+        return False
+    import json as _json
+    import urllib.request
+    body = _json.dumps({
+        "sender": {"email": sender, "name": BRAND},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "htmlContent": html,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email", data=body,
+        headers={"content-type": "application/json", "api-key": key, "accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.status in (200, 201)
+    except Exception:
+        return False
+
+
+def _email_shell(inner: str) -> str:
+    return f"""<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#18302B">
+      <div style="font-size:22px;font-weight:800;padding:8px 0">{BRAND}<span style="color:#3F7A6B">.</span></div>
+      {inner}
+      <p style="font-size:11px;color:#6B7F79;margin-top:24px;line-height:1.5">
+        Oferty oraz dane o wynagrodzeniach pochodzą z serwisu
+        <a href="https://www.adzuna.pl" style="color:#6B7F79">Adzuna</a>.
+        Dostajesz tę wiadomość, bo zapisałeś profil w {BRAND} i włączyłeś powiadomienia.
+      </p>
+    </div>"""
+
+
+def send_welcome(to_email: str) -> bool:
+    inner = f"""<p style="font-size:15px;line-height:1.6">Witaj w {BRAND}.</p>
+      <p style="font-size:15px;line-height:1.6">Twoje konto jest gotowe. Uzupełnij profil i wybierz obszary,
+      w których chcesz pracować, a my pokażemy Ci dopasowane oferty z Dolnego Śląska. Gdy pojawią się nowe
+      pasujące oferty, dostaniesz od nas maila.</p>
+      <p style="margin-top:18px"><a href="{APP_URL}" style="background:#3F7A6B;color:#fff;
+        padding:11px 18px;border-radius:8px;text-decoration:none;font-weight:600">Otwórz {BRAND}</a></p>"""
+    return send_email(to_email, f"Witaj w {BRAND}", _email_shell(inner))
+
+
+def _match_row_html(total, o):
+    adz = ('<div style="font-size:11px;color:#6B7F79;margin-top:4px">'
+           '<a href="https://www.adzuna.pl" style="color:#6B7F79">Jobs</a> by '
+           '<a href="https://www.adzuna.pl" style="color:#6B7F79">Adzuna</a></div>') if getattr(o, "source", "") == "adzuna" else ""
+    link = (f'<a href="{o.url}" style="color:#3F7A6B;font-size:13px">Zobacz ofertę →</a>') if o.url else ""
+    return f"""<div style="border:1px solid #DCE3E0;border-radius:10px;padding:14px;margin-top:10px">
+      <div style="display:inline-block;background:#DD6B4F;color:#fff;font-weight:700;border-radius:999px;
+        padding:2px 10px;font-size:13px">{total}/100</div>
+      <div style="font-weight:700;font-size:15px;margin-top:6px">{_h(o.place)}</div>
+      <div style="font-size:13px;color:#6B7F79;margin-top:2px">{_h(o.spec)} · {_h(o.city)} · {_h(o.forma)}</div>
+      <div style="margin-top:6px">{link}</div>{adz}</div>"""
+
+
+def _h(s):
+    s = "" if s is None else str(s)
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def send_match_email(to_email, nurse, new_matches):
+    n = len(new_matches)
+    slowo = "nową ofertę" if n == 1 else ("nowe oferty" if 2 <= n <= 4 else "nowych ofert")
+    rows = "".join(_match_row_html(t, o) for t, o in new_matches[:10])
+    inner = f"""<p style="font-size:15px;line-height:1.6">Cześć{', ' + _h(nurse.name) if nurse.name else ''}.</p>
+      <p style="font-size:15px;line-height:1.6">Mamy dla Ciebie {n} {slowo} dopasowane do Twojego profilu.</p>
+      {rows}
+      <p style="margin-top:18px"><a href="{APP_URL}" style="background:#3F7A6B;color:#fff;
+        padding:11px 18px;border-radius:8px;text-decoration:none;font-weight:600">Zobacz wszystkie dopasowania</a></p>"""
+    subject = f"{n} {slowo} dla Ciebie — {BRAND}"
+    return send_email(to_email, subject, _email_shell(inner))
+
+
+def notify_new_matches(db=None) -> int:
+    """Dla każdej pielęgniarki z włączonymi powiadomieniami wysyła zbiorczy mail
+    z dopasowaniami powyżej progu, których jeszcze nie wysłano. Zwraca liczbę wysłanych maili."""
+    own = db is None
+    if own:
+        db = SessionLocal()
+    sent = 0
+    try:
+        nurses = db.query(Nurse).filter(Nurse.notify_enabled == True, Nurse.user_id != 0).all()
+        for nurse in nurses:
+            user = db.get(User, nurse.user_id)
+            if not user:
+                continue
+            secs = nurse_sections(nurse)
+            matches = []
+            for o in db.query(Offer).filter(Offer.active == True):
+                # do maila tylko oferty z wybranego obszaru (wysoka trafność), powyżej progu
+                if o.spec not in secs:
+                    continue
+                t = score(nurse, o)["total"]
+                if t >= NOTIFY_THRESHOLD:
+                    matches.append((t, o))
+            if not matches:
+                continue
+            already = {r.offer_id for r in db.query(SentMatch).filter(SentMatch.nurse_id == nurse.id)}
+            new = [(t, o) for (t, o) in matches if o.id not in already]
+            if not new:
+                continue
+            new.sort(key=lambda x: -x[0])
+            if send_match_email(user.email, nurse, new):
+                for t, o in new:
+                    db.add(SentMatch(nurse_id=nurse.id, offer_id=o.id, sent_at=datetime.utcnow()))
+                db.commit()
+                sent += 1
+    finally:
+        if own:
+            db.close()
+    return sent
 
 
 @app.get("/api/nurses")
@@ -797,6 +934,11 @@ def run_import(max_pages_big=4, max_pages_small=1):
             o.active = False
         IMPORT_STATUS["deactivated"] = len(stale)
         db.commit()
+        # po imporcie rozsyłamy nowe dopasowania
+        try:
+            IMPORT_STATUS["mails_sent"] = notify_new_matches(db)
+        except Exception:
+            pass
     except Exception as e:
         IMPORT_STATUS["errors"] += 1
         IMPORT_STATUS["last_run"] = f"przerwane: {e}"
@@ -893,6 +1035,28 @@ def internal_sync_status(db: Session = Depends(get_db)):
     total = db.query(Offer).filter(Offer.active == True).count()
     adzuna = db.query(Offer).filter(Offer.source == "adzuna", Offer.active == True).count()
     return {"aktywne_oferty": total, "z_adzuny": adzuna, **IMPORT_STATUS}
+
+
+@app.get("/internal/test-email")
+def test_email(token: str = "", to: str = ""):
+    secret = os.environ.get("SYNC_TOKEN")
+    if not secret or token != secret:
+        raise HTTPException(403, "Zły lub brakujący token")
+    if "@" not in to:
+        raise HTTPException(400, "Podaj adres: /internal/test-email?token=...&to=twoj@email.pl")
+    ok = send_email(to, f"Test {BRAND}", _email_shell(
+        '<p style="font-size:15px">To testowa wiadomość z MedykWybiera. Jeśli ją widzisz, wysyłka maili działa.</p>'))
+    return {"wyslano": ok, "do": to,
+            "info": "" if ok else "Sprawdź BREVO_API_KEY i MAIL_FROM na Render oraz weryfikację domeny w Brevo"}
+
+
+@app.get("/internal/send-notifications")
+def send_notifications(token: str = ""):
+    secret = os.environ.get("SYNC_TOKEN")
+    if not secret or token != secret:
+        raise HTTPException(403, "Zły lub brakujący token")
+    n = notify_new_matches()
+    return {"wyslane_maile": n}
 
 
 # --------------------------------------------------------------------------
