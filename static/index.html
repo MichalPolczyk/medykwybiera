@@ -22,7 +22,7 @@
   .lead{color:var(--muted);font-size:14.5px;margin-top:6px;line-height:1.5}
   .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:18px}
   h2{font-size:18px;margin:0 0 4px}
-  label{font-size:12.5px;color:var(--muted);margin:12px 0 4px;display:block}
+  label{font-size:12.5px;color:var(--muted);margin:14px 0 4px;display:block}
   input,select{width:100%;padding:11px 12px;border-radius:9px;border:1px solid var(--line);
     background:#fff;color:var(--ink);font-size:15px;font-family:inherit}
   .btn{width:100%;border:none;background:var(--sage);color:#fff;border-radius:10px;
@@ -37,6 +37,21 @@
   .check{display:flex;gap:9px;align-items:flex-start;margin-top:14px;font-size:13.5px;color:var(--ink);line-height:1.45}
   .check input{width:auto;margin-top:2px}
   .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  /* picker */
+  .picker{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:6px}
+  .pcount{font-size:12.5px;color:var(--muted);margin:2px 0 8px}
+  .sec{border-bottom:1px solid var(--line)}
+  .sec:last-child{border-bottom:none}
+  .sechead{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer}
+  .sechead.on{background:var(--sageSoft)}
+  .sechead .nm{flex:1;font-size:14px;font-weight:600}
+  .sechead .cnt{font-size:11.5px;color:var(--sage);font-weight:600}
+  .chev{color:var(--muted);font-size:12px;width:14px;text-align:center}
+  .subs{padding:2px 12px 10px 38px;display:none}
+  .subs.open{display:block}
+  .sub{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13.5px}
+  .cbx{width:18px;height:18px;flex-shrink:0;accent-color:var(--sage)}
+  .disabled{opacity:.4;pointer-events:none}
   .section-h{display:flex;align-items:baseline;justify-content:space-between;margin:26px 0 4px}
   .section-h h2{font-size:15px;text-transform:uppercase;letter-spacing:.02em}
   .match{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:10px}
@@ -54,7 +69,6 @@
   .note{color:var(--muted);font-size:13px;margin-top:12px;line-height:1.5}
   .info{background:var(--sageSoft);border-radius:10px;padding:12px 14px;font-size:13.5px;line-height:1.5;margin-top:12px}
   .muted{color:var(--muted);font-size:12.5px}
-  .center{text-align:center}
   a.offer{display:inline-block;margin-top:4px;color:#fff;background:var(--sage);
     padding:9px 14px;border-radius:8px;text-decoration:none;font-size:13.5px;font-weight:600}
 </style>
@@ -69,10 +83,10 @@
 </div>
 
 <script>
-const SPECS = ["Anestezjologiczne i intensywna terapia","Ratunkowe / SOR","Chirurgiczne / blok operacyjny","Internistyczne / zachowawcze","Kardiologiczne","Onkologiczne","Dializoterapia / nefrologiczne","POZ / środowiskowo-rodzinne","Pediatryczne / neonatologiczne","Geriatryczne / opieka długoterminowa"];
 const FORMY = ["Umowa o pracę","Umowa zlecenie","Kontrakt B2B","Dowolna"];
 const TRYBY = ["Jednozmianowy (dzienny)","Zmianowy (w tym noce)","Dowolny"];
 const CITIES = ["Wrocław","Wałbrzych","Legnica","Jelenia Góra","Lubin","Głogów","Świdnica","Bolesławiec","Oleśnica","Oława","Dzierżoniów","Kłodzko","Zgorzelec","Polkowice","Trzebnica","Ząbkowice Śląskie","Lubań","Złotoryja","Jawor","Bielawa","Nowa Ruda","Kamienna Góra","Strzelin","Środa Śląska","Milicz","Wołów","Góra","Brzeg Dolny"];
+const MAX_SECTIONS = 3, MAX_SUBS = 10;
 
 const app = document.getElementById("app");
 const who = document.getElementById("who");
@@ -88,9 +102,11 @@ async function api(method, path, body){
   return data;
 }
 
-let state = null;
-async function refresh(){ state = await api("GET","/api/me"); render(); }
-
+let state=null, SECTIONS=null;
+async function refresh(){
+  if(!SECTIONS) SECTIONS = await api("GET","/api/sections");
+  state = await api("GET","/api/me"); render();
+}
 function render(){
   if(!state || !state.logged_in){ who.innerHTML=""; return showAuth(); }
   who.innerHTML = `${esc(state.email)} <a onclick="doLogout()">Wyloguj</a>`;
@@ -99,40 +115,119 @@ function render(){
 }
 
 /* ---------- LOGOWANIE / REJESTRACJA ---------- */
-let authMode = "login";
+let authMode="login";
 function showAuth(){
   app.innerHTML = `
-  <p class="lead">Załóż profil pielęgniarki, a my pokażemy Ci oferty pracy dopasowane do Twojej specjalizacji i okolicy. Gdy pojawią się nowe pasujące oferty, damy Ci znać mailem.</p>
+  <p class="lead">Załóż profil pielęgniarki, a my pokażemy Ci oferty pracy dopasowane do obszarów, w których chcesz pracować, i do Twojej okolicy. Gdy pojawią się nowe pasujące oferty, damy Ci znać mailem.</p>
   <div class="card">
     <div class="tabs">
-      <button id="t-login" class="${authMode==='login'?'on':''}" onclick="setAuth('login')">Logowanie</button>
-      <button id="t-reg" class="${authMode==='register'?'on':''}" onclick="setAuth('register')">Rejestracja</button>
+      <button class="${authMode==='login'?'on':''}" onclick="setAuth('login')">Logowanie</button>
+      <button class="${authMode==='register'?'on':''}" onclick="setAuth('register')">Rejestracja</button>
     </div>
     <label>Adres e-mail</label>
     <input id="a-email" type="email" placeholder="np. anna.kowalska@wp.pl" autocomplete="email">
     <label>Hasło</label>
-    <input id="a-pass" type="password" placeholder="${authMode==='register'?'min. 6 znaków':'Twoje hasło'}" autocomplete="${authMode==='register'?'new-password':'current-password'}">
+    <input id="a-pass" type="password" placeholder="${authMode==='register'?'min. 6 znaków':'Twoje hasło'}">
     <div class="err" id="a-err"></div>
     <button class="btn" onclick="doAuth()">${authMode==='register'?'Załóż konto':'Zaloguj się'}</button>
-    ${authMode==='register'?'<p class="hint">Rejestrując się, zakładasz konto, do którego przypiszemy Twój profil i powiadomienia o ofertach.</p>':''}
   </div>`;
 }
 function setAuth(m){ authMode=m; showAuth(); }
 async function doAuth(){
   const email=document.getElementById("a-email").value.trim();
   const pass=document.getElementById("a-pass").value;
-  const err=document.getElementById("a-err");
-  err.style.display="none";
-  try{
-    await api("POST", authMode==='register'?"/api/register":"/api/login", {email, password:pass});
-    await refresh();
-  }catch(e){ err.textContent=e.message; err.style.display="block"; }
+  const err=document.getElementById("a-err"); err.style.display="none";
+  try{ await api("POST", authMode==='register'?"/api/register":"/api/login", {email,password:pass}); await refresh(); }
+  catch(e){ err.textContent=e.message; err.style.display="block"; }
+}
+
+/* ---------- PICKER OBSZARÓW ---------- */
+let whole=new Set();    // sekcje wybrane w całości
+let subsSel=new Set();  // "Sekcja::Podsekcja"
+let openSec=new Set();  // rozwinięte sekcje (UI)
+
+function activeSections(){
+  const s=new Set(whole);
+  subsSel.forEach(k=>s.add(k.split("::")[0]));
+  return s;
+}
+function pickerCounts(){ return {sec:activeSections().size, sub:subsSel.size}; }
+
+function toggleWhole(sec){
+  if(whole.has(sec)){ whole.delete(sec); }
+  else{
+    const act=activeSections();
+    if(!act.has(sec) && act.size>=MAX_SECTIONS) return alertLimit("sekcje");
+    whole.add(sec);
+    // całość zastępuje pojedyncze podsekcje tej sekcji
+    [...subsSel].forEach(k=>{ if(k.startsWith(sec+"::")) subsSel.delete(k); });
+  }
+  drawPicker();
+}
+function toggleSub(sec,sub){
+  const key=sec+"::"+sub;
+  if(subsSel.has(key)){ subsSel.delete(key); }
+  else{
+    if(whole.has(sec)) return; // całość już obejmuje
+    const act=activeSections();
+    if(!act.has(sec) && act.size>=MAX_SECTIONS) return alertLimit("sekcje");
+    if(subsSel.size>=MAX_SUBS) return alertLimit("podsekcje");
+    subsSel.add(key);
+  }
+  drawPicker();
+}
+function toggleOpen(sec){ openSec.has(sec)?openSec.delete(sec):openSec.add(sec); drawPicker(); }
+function alertLimit(what){
+  const el=document.getElementById("p-limit");
+  if(el){ el.textContent = what==="sekcje"
+    ? `Możesz wybrać maksymalnie ${MAX_SECTIONS} sekcje.`
+    : `Możesz wybrać maksymalnie ${MAX_SUBS} podsekcji.`;
+    el.style.display="block"; setTimeout(()=>el.style.display="none",2500); }
+}
+
+function drawPicker(){
+  const box=document.getElementById("picker"); if(!box) return;
+  const c=pickerCounts(); const act=activeSections();
+  document.getElementById("pcount").textContent =
+    `Wybrano ${c.sec} z ${MAX_SECTIONS} sekcji · ${c.sub} z ${MAX_SUBS} podsekcji`;
+  box.innerHTML = Object.keys(SECTIONS).map(sec=>{
+    const subs=SECTIONS[sec], isWhole=whole.has(sec);
+    const selInSec=subs.filter(s=>subsSel.has(sec+"::"+s)).length;
+    const isActive=act.has(sec);
+    const secFull=!isActive && act.size>=MAX_SECTIONS;  // nie można już dodać nowej sekcji
+    const open=openSec.has(sec);
+    const tag = isWhole?'<span class="cnt">cała</span>':(selInSec?`<span class="cnt">${selInSec}</span>`:'');
+    const subHtml = subs.map(s=>{
+      const key=sec+"::"+s, on=isWhole||subsSel.has(key);
+      const subFull = !on && ((whole.has(sec)) || (!isActive&&act.size>=MAX_SECTIONS) || subsSel.size>=MAX_SUBS);
+      return `<div class="sub ${subFull?'disabled':''}">
+        <input type="checkbox" class="cbx" ${on?'checked':''} ${isWhole?'disabled':''}
+          onclick="toggleSub('${esc(sec)}','${esc(s)}')"><span>${esc(s)}</span></div>`;
+    }).join("");
+    return `<div class="sec">
+      <div class="sechead ${isActive?'on':''} ${secFull&&!isWhole?'disabled':''}">
+        <input type="checkbox" class="cbx" ${isWhole?'checked':''} onclick="toggleWhole('${esc(sec)}')">
+        <span class="nm" onclick="toggleOpen('${esc(sec)}')">${esc(sec)} ${tag}</span>
+        <span class="chev" onclick="toggleOpen('${esc(sec)}')">${open?'▾':'▸'}</span>
+      </div>
+      <div class="subs ${open?'open':''}">${subHtml}</div>
+    </div>`;
+  }).join("");
+}
+
+function buildPicks(){
+  const picks=[];
+  whole.forEach(sec=>picks.push({section:sec, sub:null}));
+  subsSel.forEach(k=>{ const [sec,sub]=k.split("::"); if(!whole.has(sec)) picks.push({section:sec, sub}); });
+  return picks;
 }
 
 /* ---------- FORMULARZ PROFILU ---------- */
 function opts(arr,sel){ return arr.map(x=>`<option ${x===sel?"selected":""}>${esc(x)}</option>`).join(""); }
 function showProfile(p){
-  const editing = !!p;
+  whole=new Set(); subsSel=new Set(); openSec=new Set();
+  if(p && p.picks){ p.picks.forEach(pk=>{ pk.sub?subsSel.add(pk.section+"::"+pk.sub):whole.add(pk.section); }); }
+  const editing=!!p;
   app.innerHTML = `
   <p class="lead">${editing?'Zaktualizuj swój profil.':'Uzupełnij profil. Na jego podstawie dobierzemy oferty z Dolnego Śląska.'}</p>
   <div class="card">
@@ -142,18 +237,24 @@ function showProfile(p){
     <input id="p-name" value="${esc(p?p.name:'')}" placeholder="np. Anna">
     <label>Miasto</label>
     <input id="p-city" list="cl" value="${esc(p?p.city:'')}" placeholder="np. Wrocław, Legnica, Kłodzko">
-    <label>Specjalizacja</label>
-    <select id="p-spec">${opts(SPECS, p?p.spec:'')}</select>
-    <div class="row2">
-      <div><label>Lata doświadczenia</label><input id="p-years" type="number" min="0" value="${p?p.years:0}"></div>
-      <div><label>Maks. dojazd (km)</label><input id="p-km" type="number" min="0" value="${p?p.max_km:40}"></div>
-    </div>
+    <label>Maksymalny dojazd (km)</label>
+    <input id="p-km" type="number" min="0" value="${p?p.max_km:40}">
+
+    <label>Obszary, w których chcesz pracować</label>
+    <div class="pcount" id="pcount"></div>
+    <div class="picker" id="picker"></div>
+    <div class="err" id="p-limit" style="margin-top:8px"></div>
+    <p class="hint">Zaznacz całą sekcję albo wybrane podsekcje. Nie musisz mieć specjalizacji — liczy się to, gdzie chcesz pracować.</p>
+
+    <label>Lata doświadczenia</label>
+    <input id="p-years" type="number" min="0" value="${p?p.years:0}">
     <label>Preferowana forma zatrudnienia</label>
     <select id="p-forma">${opts(FORMY, p?p.forma:'Dowolna')}</select>
     <label>Preferowany tryb pracy</label>
     <select id="p-tryb">${opts(TRYBY, p?p.tryb:'Dowolny')}</select>
     <label>Oczekiwane wynagrodzenie netto / mies. (opcjonalnie)</label>
     <input id="p-pay" type="number" min="0" value="${p&&p.expected?p.expected:''}" placeholder="np. 7000">
+
     <div class="check">
       <input type="checkbox" id="p-notify" ${(!p||p.notify_enabled)?'checked':''}>
       <span>Chcę dostawać mailem powiadomienia o nowych dopasowanych ofertach.</span>
@@ -165,12 +266,15 @@ function showProfile(p){
     <div class="err" id="p-err"></div>
     <button class="btn" onclick="saveProfile()">${editing?'Zapisz zmiany':'Zapisz profil i zobacz dopasowania'}</button>
   </div>`;
+  drawPicker();
 }
 async function saveProfile(){
   const v=id=>document.getElementById(id).value;
   const err=document.getElementById("p-err"); err.style.display="none";
+  const picks=buildPicks();
+  if(!picks.length){ err.textContent="Wybierz co najmniej jeden obszar pracy."; err.style.display="block"; return; }
   const body={
-    name:v("p-name").trim(), city:v("p-city").trim(), spec:v("p-spec"),
+    name:v("p-name").trim(), city:v("p-city").trim(), picks,
     years:Number(v("p-years"))||0, max_km:Number(v("p-km"))||40,
     forma:v("p-forma"), tryb:v("p-tryb"), expected:Number(v("p-pay"))||0,
     notify_enabled:document.getElementById("p-notify").checked,
@@ -194,30 +298,26 @@ function ring(v){
 function bar(label,v,max){return `<div class="bar"><span class="lab">${label}</span>
   <span class="track"><span class="fill" style="width:${v/max*100}%"></span></span>
   <span class="val">${v}/${max}</span></div>`;}
-
 async function showMatches(){
   app.innerHTML = `<p class="muted" style="margin-top:18px">Ładuję dopasowania…</p>`;
-  let res;
-  try{ res = await api("GET","/api/my-matches"); }
+  let res; try{ res=await api("GET","/api/my-matches"); }
   catch(e){ app.innerHTML=`<div class="card"><p>${esc(e.message)}</p></div>`; return; }
-  const p = state.profile;
-  let head = `
-    <div class="card">
+  const p=state.profile;
+  const areas=(p.sections||[]).join(" · ");
+  const head=`<div class="card">
       <h2>Cześć${p&&p.name?', '+esc(p.name):''}.</h2>
-      <p class="muted">${esc(p.spec)} · ${esc(p.city)} · dojazd do ${p.max_km} km</p>
+      <p class="muted">${esc(areas)}<br>${esc(p.city)} · dojazd do ${p.max_km} km</p>
       <button class="btn ghost" style="margin-top:12px" onclick="editProfile()">Edytuj profil</button>
     </div>`;
   if(!res.length){
-    app.innerHTML = head + `<div class="info">Na razie nie mamy ofert w Twoim regionie. Twój profil jest zapisany — gdy pojawią się dopasowane oferty, dostaniesz maila.</div>`;
+    app.innerHTML=head+`<div class="info">Na razie nie mamy ofert w Twoim regionie. Twój profil jest zapisany — gdy pojawią się dopasowane oferty, dostaniesz maila.</div>`;
     return;
   }
-  const top = res.slice(0,10);
-  const best = top[0].total;
-  const lowNote = best<70 ? `<div class="info">Na razie nie mamy ofert o wysokim dopasowaniu do Twojego profilu. Poniżej najbliższe, jakie są dostępne. Gdy pojawią się lepsze, powiadomimy Cię mailem.</div>` : "";
-  app.innerHTML = head
-    + `<div class="section-h"><h2>Oferty dla Ciebie</h2><span class="muted">wg dopasowania</span></div>`
-    + lowNote
-    + top.map(renderMatch).join("");
+  const top=res.slice(0,10), best=top[0].total;
+  const lowNote=best<70?`<div class="info">Na razie nie mamy ofert o wysokim dopasowaniu do Twojego profilu. Poniżej najbliższe, jakie są dostępne. Gdy pojawią się lepsze, powiadomimy Cię mailem.</div>`:"";
+  app.innerHTML=head
+    +`<div class="section-h"><h2>Oferty dla Ciebie</h2><span class="muted">wg dopasowania</span></div>`
+    +lowNote+top.map(renderMatch).join("");
 }
 function renderMatch(m){
   const it=m.item;
@@ -236,7 +336,7 @@ function renderMatch(m){
       <button class="btn ghost" style="width:auto;margin:0;padding:8px 12px;font-size:13px" onclick="toggleDet(this)">Szczegóły</button>
     </div>
     <div class="details" style="display:none">
-      ${bar("Specjalizacja",m.parts.spec,20)}${bar("Lokalizacja",m.parts.loc,20)}
+      ${bar("Obszar",m.parts.spec,20)}${bar("Lokalizacja",m.parts.loc,20)}
       ${bar("Forma",m.parts.forma,15)}${bar("Tryb pracy",m.parts.tryb,10)}
       ${bar("Doświadczenie",m.parts.exp,10)}${bar("Wynagrodzenie",m.parts.sal,25)}
       <p class="note">${esc(it.note)}</p>
