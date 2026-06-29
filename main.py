@@ -71,6 +71,9 @@ class Nurse(Base):
     user_id: Mapped[int] = mapped_column(Integer, index=True, default=0)
     notify_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     rodo_consent_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    # wybrane obszary pracy (rodziny) — źródło dopasowania
+    areas: Mapped[str] = mapped_column(String, default="")          # sekcje, po jednej w linii
+    areas_detail: Mapped[str] = mapped_column(String, default="")    # surowe wybory (do edycji)
 
 
 class Offer(Base):
@@ -139,18 +142,59 @@ DOLNOSLASKIE = {
     "Środa Śląska", "Milicz", "Wołów", "Góra", "Brzeg Dolny",
 }
 
-SPEC_FAMILY = {
-    "Anestezjologiczne i intensywna terapia": "krytyczna",
-    "Ratunkowe / SOR": "krytyczna",
-    "Chirurgiczne / blok operacyjny": "zabiegowa",
-    "Internistyczne / zachowawcze": "zachowawcza",
-    "Kardiologiczne": "zachowawcza",
-    "Onkologiczne": "zachowawcza",
-    "Dializoterapia / nefrologiczne": "zachowawcza",
-    "POZ / środowiskowo-rodzinne": "podstawowa",
-    "Pediatryczne / neonatologiczne": "pediatria",
-    "Geriatryczne / opieka długoterminowa": "dlugoterminowa",
+# --------------------------------------------------------------------------
+# RODZINY (SEKCJE) SPECJALIZACJI — pielęgniarka wybiera, dopasowanie liczy się po sekcji
+# --------------------------------------------------------------------------
+SECTIONS = {
+    "Anestezjologia i intensywna terapia": ["Anestezjologia", "Intensywna terapia (OIOM)", "Oddział wzmożonego nadzoru", "Sala wybudzeń", "Toksykologia"],
+    "Medycyna ratunkowa / SOR": ["Medycyna ratunkowa / SOR"],
+    "Blok operacyjny i chirurgia": ["Blok operacyjny", "Oddział chirurgiczny ogólny", "Chirurgia plastyczna", "Chirurgia naczyniowa", "Ortopedia", "Urologia", "Okulistyka", "Laryngologia", "Endoskopia"],
+    "Interna i choroby wewnętrzne": ["Interna", "Kardiologia", "Pracownia hemodynamiki", "Pulmonologia", "Gastroenterologia", "Diabetologia", "Reumatologia", "Hematologia", "Alergologia", "Dermatologia"],
+    "Nefrologia i dializoterapia": ["Nefrologia", "Dializoterapia", "Transplantologia"],
+    "Onkologia": ["Onkologia"],
+    "Neurologia i rehabilitacja": ["Neurologia", "Rehabilitacja"],
+    "Pediatria i neonatologia": ["Pediatria", "Intensywna terapia dziecięca (OIOM dziecięcy)", "Intensywna terapia noworodka", "SOR dziecięcy", "Blok operacyjny dziecięcy"],
+    "Położnictwo i ginekologia": ["Położnictwo", "Oddział położniczy", "Ginekologia", "Leczenie niepłodności"],
+    "Psychiatria i opieka nad niepełnosprawnymi": ["Psychiatria", "Opieka nad osobami z niepełnosprawnością intelektualną/rozwojową"],
+    "Geriatria, opieka długoterminowa i paliatywna": ["Geriatria", "ZOL / zakład pielęgnacyjno-opiekuńczy", "Opieka hospicyjna", "Opieka paliatywna", "Poradnia / leczenie bólu", "Leczenie i pielęgnacja ran przewlekłych"],
+    "POZ i pielęgniarstwo środowiskowe": ["Podstawowa Opieka Zdrowotna (POZ)", "Pielęgniarstwo środowiskowe", "Medycyna pracy", "Medycyna szkolna"],
+    "Choroby zakaźne i kontrola zakażeń": ["Choroby zakaźne", "HIV / AIDS", "Kontrola zakażeń szpitalnych"],
+    "Administracja, edukacja i badania": ["Administracja / zarządzanie", "Dydaktyka / edukacja medyczna", "Zdrowie publiczne", "Badania naukowe / kliniczne", "Radiologia", "Pielęgniarstwo więzienne"],
 }
+
+# słowa kluczowe do klasyfikacji oferty na sekcję (pierwsze trafienie wygrywa)
+SECTION_KEYWORDS = {
+    "Anestezjologia i intensywna terapia": ["anestezjolog", "intensywnej terapii", "intensywna terapia", "oiom", "oit", "wybudze", "wzmożonego nadzoru", "toksykolog", "respirator"],
+    "Medycyna ratunkowa / SOR": ["ratunkow", " sor", "izba przyjęć", "szpitalny oddział ratunkowy"],
+    "Blok operacyjny i chirurgia": ["blok operacyjn", "operacyjn", "instrumentariusz", "chirurg", "ortoped", "urolog", "okulist", "laryngolog", "endoskop"],
+    "Interna i choroby wewnętrzne": ["internistyczn", " interny", "interna", "kardiolog", "hemodynamik", "pulmonolog", "gastroenterolog", "diabetolog", "reumatolog", "hematolog", "alergolog", "dermatolog", "ekg"],
+    "Nefrologia i dializoterapia": ["nefrolog", "dializ", "stacja dializ", "transplant"],
+    "Onkologia": ["onkolog", "chemioterap", "hemato-onkolog"],
+    "Neurologia i rehabilitacja": ["neurolog", "rehabilitac", "udar", "fizjoterap"],
+    "Pediatria i neonatologia": ["pediatr", "dziecięc", "noworodk", "neonatolog"],
+    "Położnictwo i ginekologia": ["położnic", "położn", "ginekolog", "niepłodn", "porodów", "sala porod"],
+    "Psychiatria i opieka nad niepełnosprawnymi": ["psychiatr", "niepełnospraw", "zdrowia psychiczn"],
+    "Geriatria, opieka długoterminowa i paliatywna": ["geriatr", "długoterminow", "zol ", "opiekuńcz", "hospicj", "paliatywn", "leczenia bólu", "ran przewlek", "dps"],
+    "POZ i pielęgniarstwo środowiskowe": ["poz", "środowiskow", "podstawowej opieki", "medycyny pracy", "medycyna pracy", "szkoln"],
+    "Choroby zakaźne i kontrola zakażeń": ["zakaźn", "hiv", "aids", "kontrola zakażeń", "epidemiolog"],
+    "Administracja, edukacja i badania": ["administrac", "zarządz", "dydaktyk", "edukac", "zdrowia publiczn", "badania klinicz", "radiolog", "więzienn"],
+}
+
+
+def section_of(sub_or_section):
+    """Zwraca nazwę sekcji dla podanej podsekcji lub sekcji."""
+    if sub_or_section in SECTIONS:
+        return sub_or_section
+    for sec, subs in SECTIONS.items():
+        if sub_or_section in subs:
+            return sec
+    return None
+
+
+def nurse_sections(nurse):
+    """Zbiór sekcji wybranych przez pielęgniarkę (źródło dopasowania)."""
+    raw = getattr(nurse, "areas", "") or ""
+    return set(s for s in raw.split("\n") if s)
 
 
 def distance_km(a: str, b: str) -> int:
@@ -169,11 +213,12 @@ def distance_km(a: str, b: str) -> int:
 
 
 def score(nurse: Nurse, offer: Offer) -> dict:
-    # specjalizacja (20)
-    if nurse.spec == offer.spec:
+    # specjalizacja (20) — dopasowanie po sekcji (rodzinie); oferta ogólna = neutralne
+    secs = nurse_sections(nurse)
+    if offer.spec in secs:
         spec = 20
-    elif SPEC_FAMILY.get(nurse.spec) == SPEC_FAMILY.get(offer.spec):
-        spec = 12
+    elif offer.spec == "Pielęgniarstwo (ogólne)":
+        spec = 12  # nieokreślony obszar oferty — nie karzemy
     else:
         spec = 4
 
@@ -257,10 +302,19 @@ class OfferIn(BaseModel):
 
 
 def nurse_dict(n: Nurse) -> dict:
+    detail = getattr(n, "areas_detail", "") or ""
+    picks = []
+    for line in detail.split("\n"):
+        if not line:
+            continue
+        sec, _, sub = line.partition("::")
+        picks.append({"section": sec, "sub": None if sub in ("", "*") else sub})
     return {"id": n.id, "name": n.name, "city": n.city, "spec": n.spec,
             "years": n.years, "forma": n.forma, "tryb": n.tryb,
             "max_km": n.max_km, "expected": n.expected, "note": n.note,
-            "notify_enabled": bool(getattr(n, "notify_enabled", True))}
+            "notify_enabled": bool(getattr(n, "notify_enabled", True)),
+            "sections": [s for s in (getattr(n, "areas", "") or "").split("\n") if s],
+            "picks": picks}
 
 
 def offer_dict(o: Offer) -> dict:
@@ -339,6 +393,8 @@ def migrate_nurses():
         "ALTER TABLE nurses ADD COLUMN IF NOT EXISTS user_id INTEGER DEFAULT 0",
         "ALTER TABLE nurses ADD COLUMN IF NOT EXISTS notify_enabled BOOLEAN DEFAULT TRUE",
         "ALTER TABLE nurses ADD COLUMN IF NOT EXISTS rodo_consent_at TIMESTAMP",
+        "ALTER TABLE nurses ADD COLUMN IF NOT EXISTS areas VARCHAR DEFAULT ''",
+        "ALTER TABLE nurses ADD COLUMN IF NOT EXISTS areas_detail VARCHAR DEFAULT ''",
     ]
     with engine.begin() as conn:
         for stmt in alters:
@@ -449,10 +505,15 @@ def me(request: Request, db: Session = Depends(get_db)):
             "profile": nurse_dict(nurse) if nurse else None}
 
 
+class Pick(BaseModel):
+    section: str
+    sub: str | None = None
+
+
 class ProfileIn(BaseModel):
     name: str = ""
     city: str
-    spec: str
+    picks: list[Pick] = []
     years: int = 0
     forma: str
     tryb: str
@@ -463,14 +524,38 @@ class ProfileIn(BaseModel):
     rodo_consent: bool = False
 
 
+@app.get("/api/sections")
+def get_sections():
+    return SECTIONS
+
+
 @app.post("/api/profile")
 def save_profile(data: ProfileIn, user: User = Depends(require_user), db: Session = Depends(get_db)):
     if not data.rodo_consent:
         raise HTTPException(400, "Wymagana zgoda na przetwarzanie danych (RODO)")
+
+    # walidacja wyborów obszarów
+    valid = [p for p in data.picks if p.section in SECTIONS]
+    sections = []
+    for p in valid:
+        if p.section not in sections:
+            sections.append(p.section)
+    if not sections:
+        raise HTTPException(400, "Wybierz co najmniej jeden obszar pracy")
+    if len(sections) > 3:
+        raise HTTPException(400, "Można wybrać maksymalnie 3 sekcje")
+    subs = [p for p in valid if p.sub]
+    if len(subs) > 10:
+        raise HTTPException(400, "Można wybrać maksymalnie 10 podsekcji")
+
+    areas = "\n".join(sections)
+    detail = "\n".join(f"{p.section}::{p.sub or '*'}" for p in valid)
+
     nurse = db.query(Nurse).filter(Nurse.user_id == user.id).first()
     fields = dict(
         name=data.name or user.email.split("@")[0], city=data.city.strip() or "Wrocław",
-        spec=data.spec, years=data.years, forma=data.forma, tryb=data.tryb,
+        spec=sections[0], areas=areas, areas_detail=detail,
+        years=data.years, forma=data.forma, tryb=data.tryb,
         max_km=data.max_km or 50, expected=data.expected or 0, note=data.note,
         notify_enabled=data.notify_enabled,
     )
@@ -618,7 +703,7 @@ def _classify_llm(title, desc):
         return None
     import json as _json
     import urllib.request
-    cats = list(ADZUNA_SPEC_KEYWORDS.keys()) + ["Pielęgniarstwo (ogólne)"]
+    cats = list(SECTIONS.keys()) + ["Pielęgniarstwo (ogólne)"]
     prompt = ("Przypisz to ogłoszenie o pracę dla pielęgniarki do JEDNEJ kategorii z listy. "
               "Odpowiedz wyłącznie dokładną nazwą kategorii, bez wyjaśnień.\n\nKategorie:\n- "
               + "\n- ".join(cats) + f"\n\nTytuł: {title}\nOpis: {desc[:600]}")
@@ -829,25 +914,11 @@ ADZUNA_QUERIES = [
     "pielęgniarka rodzinna", "położna",
 ]
 
-ADZUNA_SPEC_KEYWORDS = {
-    "Anestezjologiczne i intensywna terapia": ["anestezjolog", "intensywn", "oit", "oiom", "respirator"],
-    "Ratunkowe / SOR": ["ratunkow", "sor", "izba przyjęć", "ratownict"],
-    "Chirurgiczne / blok operacyjny": ["operacyjn", "blok", "instrumentariusz", "chirurg"],
-    "Internistyczne / zachowawcze": ["internistyczn", "interny", "zachowawcz"],
-    "Kardiologiczne": ["kardiolog", "ekg"],
-    "Onkologiczne": ["onkolog", "chemioterap"],
-    "Dializoterapia / nefrologiczne": ["dializ", "nefrolog"],
-    "POZ / środowiskowo-rodzinne": ["poz", "środowiskow", "rodzinn", "podstawowej opieki"],
-    "Pediatryczne / neonatologiczne": ["pediatr", "neonatolog", "dziecięc", "noworodk"],
-    "Geriatryczne / opieka długoterminowa": ["geriatr", "długoterminow", "zol", "opiekuńcz", "paliatywn"],
-}
-
-
 def _adzuna_classify(text):
     t = (text or "").lower()
-    for spec, kws in ADZUNA_SPEC_KEYWORDS.items():
+    for section, kws in SECTION_KEYWORDS.items():
         if any(k in t for k in kws):
-            return spec
+            return section
     return None
 
 
