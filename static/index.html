@@ -71,6 +71,14 @@
   .muted{color:var(--muted);font-size:12.5px}
   a.offer{display:inline-block;margin-top:4px;color:#fff;background:var(--sage);
     padding:9px 14px;border-radius:8px;text-decoration:none;font-size:13.5px;font-weight:600}
+  .adz{display:flex;align-items:center;gap:5px;margin-top:8px;font-size:12px;color:var(--muted)}
+  .adz a{color:var(--muted);text-decoration:underline}
+  .adz img{height:23px;display:block}
+  .adz .logo-fallback{font-weight:700;color:var(--ink)}
+  .jobsworth{display:inline-flex;align-items:center;gap:5px;margin-top:10px;font-size:12px;color:var(--muted);text-decoration:none}
+  .jobsworth img{height:20px;width:20px}
+  .adz-foot{margin-top:20px;font-size:12px;color:var(--muted);text-align:center;line-height:1.5}
+  .adz-foot a{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -317,10 +325,39 @@ async function showMatches(){
   const lowNote=best<70?`<div class="info">Na razie nie mamy ofert o wysokim dopasowaniu do Twojego profilu. Poniżej najbliższe, jakie są dostępne. Gdy pojawią się lepsze, powiadomimy Cię mailem.</div>`:"";
   app.innerHTML=head
     +`<div class="section-h"><h2>Oferty dla Ciebie</h2><span class="muted">wg dopasowania</span></div>`
-    +lowNote+top.map(renderMatch).join("");
+    +lowNote+top.map(renderMatch).join("")
+    +`<p class="adz-foot">Oferty oraz dane o wynagrodzeniach pochodzą z serwisu
+      <a href="${ADZUNA_LOCAL}" target="_blank" rel="noopener">Adzuna</a>.
+      Kliknięcie w ofertę przenosi do pełnego ogłoszenia w źródle.</p>`;
 }
+/* ---------- ATRYBUCJA ADZUNY (wymagana regulaminem API) ---------- */
+const ADZUNA_LOCAL = "https://www.adzuna.pl";
+const ADZUNA_JOBSWORTH = "https://www.adzuna.co.uk/jobs/salary-predictor.html";
+// Oficjalny logotyp Adzuny pobierz z https://www.adzuna.co.uk/press.html i wstaw URL tutaj.
+// Dopóki pusty, pokazujemy tekst "Adzuna" (linki i tak spełniają wymóg odesłania).
+const ADZUNA_LOGO_URL = "";
+
+function adzAttribution(){
+  const logo = ADZUNA_LOGO_URL
+    ? `<img src="${ADZUNA_LOGO_URL}" alt="Adzuna" onerror="this.outerHTML='<span class=\\'logo-fallback\\'>Adzuna</span>'">`
+    : `<span class="logo-fallback">Adzuna</span>`;
+  return `<div class="adz">
+    <a href="${ADZUNA_LOCAL}" target="_blank" rel="noopener">Jobs</a>
+    <span>by</span>
+    <a href="${ADZUNA_LOCAL}" target="_blank" rel="noopener" aria-label="Adzuna">${logo}</a>
+  </div>`;
+}
+function jobsworthMark(){
+  const icon = ADZUNA_LOGO_URL
+    ? `<img src="${ADZUNA_LOGO_URL}" alt="Adzuna Jobsworth">`
+    : "";
+  return `<a class="jobsworth" href="${ADZUNA_JOBSWORTH}" target="_blank" rel="noopener"
+    title="Salary estimate powered by Adzuna Jobsworth">${icon}Adzuna Jobsworth — wynagrodzenie szacowane</a>`;
+}
+
 function renderMatch(m){
   const it=m.item;
+  const isAdz = it.source==="adzuna";
   return `<div class="match">
     <div class="top">
       ${ring(m.total)}
@@ -332,6 +369,7 @@ function renderMatch(m){
           <span class="tag">${esc(it.forma)}</span>
         </div>
         <div class="tier" style="color:${tierColor(m.total)}">Dopasowanie: ${tierLabel(m.total)}</div>
+        ${isAdz?adzAttribution():""}
       </div>
       <button class="btn ghost" style="width:auto;margin:0;padding:8px 12px;font-size:13px" onclick="toggleDet(this)">Szczegóły</button>
     </div>
@@ -341,7 +379,7 @@ function renderMatch(m){
       ${bar("Doświadczenie",m.parts.exp,10)}${bar("Wynagrodzenie",m.parts.sal,25)}
       <p class="note">${esc(it.note)}</p>
       ${it.url?`<a class="offer" href="${esc(it.url)}" target="_blank" rel="noopener">Zobacz pełną ofertę →</a>`:""}
-      ${it.salary_predicted?`<p class="hint">Wynagrodzenie szacowane, nie podane przez pracodawcę.</p>`:""}
+      ${it.salary_predicted?jobsworthMark():""}
     </div></div>`;
 }
 function toggleDet(btn){
