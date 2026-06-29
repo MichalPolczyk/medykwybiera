@@ -1,0 +1,24 @@
+name: Import ofert i powiadomienia
+
+on:
+  schedule:
+    # 3 razy dziennie (godziny w UTC: 04:00, 12:00, 20:00 -> ok. 06/14/22 czasu PL)
+    - cron: '0 4,12,20 * * *'
+  workflow_dispatch:   # pozwala też odpalić ręcznie z zakładki Actions
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rozbudz serwer (Render usypia po bezczynnosci)
+        run: curl -sS --max-time 120 "https://medykwybiera.onrender.com/" || true
+
+      - name: Poczekaj az aplikacja wstanie
+        run: sleep 15
+
+      - name: Uruchom import i wyslij powiadomienia
+        run: |
+          curl -sS --retry 3 --retry-delay 15 --max-time 180 \
+            "https://medykwybiera.onrender.com/internal/sync?token=${SYNC_TOKEN}"
+        env:
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
